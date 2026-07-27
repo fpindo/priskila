@@ -1,0 +1,22 @@
+{
+  "name": "priskila-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PRISKILA - Project Inventory Stock & Logistics Application Monorepo",
+  "workspaces": [
+    "frontend",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "node run-dev.js",
+    "dev:web": "npm run dev -w frontend",
+    "build:web": "npm run build -w frontend",
+    "start:web": "npm run start -w frontend",
+    "lint:web": "npm run lint -w frontend",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "typescript": "^5.0.0"
+  }
+}
