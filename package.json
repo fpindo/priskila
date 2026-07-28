@@ -8,7 +8,10 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "node run-dev.js",
+    "dev": "node start-dev.js",
+    "build": "node start-build.js",
+    "production": "node start-production.js",
+    "start": "node start-production.js",
     "dev:web": "npm run dev -w frontend",
     "build:web": "npm run build -w frontend",
     "start:web": "npm run start -w frontend",
