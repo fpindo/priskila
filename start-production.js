@@ -7,15 +7,13 @@ const isWindows = process.platform === 'win32';
 const processes = [];
 let isShuttingDown = false;
 
-function start(name, command, args, cwd) {
+function start(name, command, args, cwd, extraEnv = {}) {
   const child = spawn(command, args, {
     cwd,
     shell: isWindows,
     env: {
       ...process.env,
-      NODE_ENV: process.env.NODE_ENV || 'production',
-      HOSTNAME: process.env.HOSTNAME || '127.0.0.1',
-      PORT: process.env.PORT || '3000',
+      ...extraEnv,
     },
   });
 
@@ -56,8 +54,14 @@ function shutdown(exitCode = 0) {
 
 console.log('Starting PRISKILA production services...');
 
-start('Laravel API', 'php', ['artisan', 'serve', '--host=127.0.0.1', '--port=8000'], path.join(rootPath, 'backend'));
-start('Next.js', 'npm', ['run', 'start', '-w', 'frontend'], rootPath);
+start('Laravel API', 'php', ['artisan', 'serve', '--host=127.0.0.1', '--port=8000'], path.join(rootPath, 'backend'), {
+  PRISKILA_SKIP_FRONTEND: '1',
+});
+start('Next.js', 'npm', ['run', 'start', '-w', 'frontend'], rootPath, {
+  NODE_ENV: 'production',
+  HOSTNAME: process.env.HOSTNAME || '127.0.0.1',
+  PORT: process.env.PORT || '3000',
+});
 
 process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
