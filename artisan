@@ -1,0 +1,16 @@
+#!/usr/bin/env php
+<?php
+
+$artisan = __DIR__.'/backend/artisan';
+
+if (! file_exists($artisan)) {
+    fwrite(STDERR, "Backend artisan file not found.\n");
+    exit(1);
+}
+
+$argv[0] = $artisan;
+$_SERVER['argv'] = $argv;
+$_SERVER['argc'] = count($argv);
+
+chdir(__DIR__.'/backend');
+require $artisan;
