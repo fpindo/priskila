@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 use App\Traits\Auditable;
 
-#[Fillable(['sku', 'barcode', 'nama_barang', 'deskripsi', 'kategori', 'satuan', 'min_stock', 'image_url', 'bin_id'])]
+#[Fillable(['sku', 'barcode', 'nama_barang', 'deskripsi', 'kategori', 'satuan', 'min_stock', 'harga_satuan', 'brand', 'bin_location', 'image_url', 'bin_id'])]
 class Barang extends Model
 {
     use HasFactory, SoftDeletes, Auditable;

@@ -25,6 +25,9 @@ class BarangRequest extends FormRequest
             'kategori' => ['required', 'string', 'exists:kategoris,name'],
             'satuan' => ['required', 'string', 'exists:satuans,code'],
             'min_stock' => ['required', 'integer', 'min:0'],
+            'harga_satuan' => ['nullable', 'numeric', 'min:0'],
+            'brand' => ['nullable', 'string', 'max:255'],
+            'bin_location' => ['nullable', 'string', 'max:255'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'bin_id' => ['nullable', 'integer', 'exists:bins,id'],
         ];

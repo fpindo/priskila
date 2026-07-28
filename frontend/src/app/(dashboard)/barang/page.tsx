@@ -17,9 +17,17 @@ interface Barang {
   effective_min_stock?: number;
   harga_satuan: number | null;
   brand: string | null;
+  bin_id?: number | null;
   bin_location: string | null;
   conversions?: { id: number; from_unit: string; to_unit: string; factor: number }[];
   image_url?: string;
+}
+
+interface LocationBin {
+  id: number;
+  code: string;
+  name: string;
+  full_path?: string;
 }
 
 interface PaginatedResponse<T> {
@@ -38,6 +46,7 @@ const emptyForm = {
   min_stock: 0,
   harga_satuan: '',
   brand: '',
+  bin_id: '',
   bin_location: '',
   image: null as File | null,
   image_url: '',
@@ -64,6 +73,7 @@ export default function BarangPage() {
   const [itemsLookup, setItemsLookup] = useState<Barang[]>([]);
   const [availableKategoris, setAvailableKategoris] = useState<any[]>([]);
   const [availableSatuans, setAvailableSatuans] = useState<any[]>([]);
+  const [availableBins, setAvailableBins] = useState<LocationBin[]>([]);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importItems, setImportItems] = useState<any[]>([]);
   const [importing, setImporting] = useState(false);
@@ -137,11 +147,32 @@ export default function BarangPage() {
     }
   };
 
+  const fetchBins = async () => {
+    try {
+      const res = await ApiService.get<LocationBin[]>('/locations/bins');
+      if (res.success && res.data) {
+        setAvailableBins(res.data);
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const syncBinLocation = (binId: string) => {
+    const selectedBin = availableBins.find((bin) => bin.id === Number(binId));
+
+    return {
+      bin_id: binId,
+      bin_location: selectedBin?.full_path || selectedBin?.name || '',
+    };
+  };
+
   useEffect(() => {
     fetchItems();
     fetchLookupItems();
     fetchKategoris();
     fetchSatuans();
+    fetchBins();
   }, [fetchItems]);
 
   const openCreate = () => {
@@ -167,6 +198,7 @@ export default function BarangPage() {
       min_stock: b.min_stock,
       harga_satuan: b.harga_satuan !== null ? String(b.harga_satuan) : '',
       brand: b.brand || '',
+      bin_id: b.bin_id ? String(b.bin_id) : '',
       bin_location: b.bin_location || '',
       image_url: b.image_url || '',
       image: null,
@@ -187,6 +219,7 @@ export default function BarangPage() {
       min_stock: b.min_stock,
       harga_satuan: b.harga_satuan !== null ? String(b.harga_satuan) : '',
       brand: b.brand || '',
+      bin_id: b.bin_id ? String(b.bin_id) : '',
       bin_location: b.bin_location || '',
       image_url: b.image_url || '',
       image: null,
@@ -209,6 +242,7 @@ export default function BarangPage() {
       data.append('min_stock', String(formData.min_stock));
       data.append('harga_satuan', formData.harga_satuan !== '' ? String(formData.harga_satuan) : '');
       data.append('brand', formData.brand);
+      data.append('bin_id', formData.bin_id);
       data.append('bin_location', formData.bin_location);
       if (formData.image) {
         data.append('image', formData.image);
@@ -851,13 +885,14 @@ export default function BarangPage() {
                           min_stock: selectedItem.min_stock,
                           harga_satuan: selectedItem.harga_satuan ? selectedItem.harga_satuan.toString() : '',
                           brand: selectedItem.brand || '',
+                          bin_id: selectedItem.bin_id ? String(selectedItem.bin_id) : '',
                           bin_location: selectedItem.bin_location || '',
                         }));
                       }
                     }}
                     options={[
                       { value: '', label: '-- Pilih Barang Untuk Disalin --' },
-                      ...itemsLookup.map((b) => ({
+                      ...itemsLookup.slice(0, 10).map((b) => ({
                         value: b.id.toString(),
                         label: `${b.nama_barang} (${b.sku})`,
                       })),
@@ -971,12 +1006,23 @@ export default function BarangPage() {
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                   Lokasi Rak (Bin Location)
                 </label>
-                <input
-                  value={formData.bin_location}
-                  onChange={(e) => setFormData({ ...formData, bin_location: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
-                  placeholder="RAK-01-A, LOK-B3, dll..."
+                <Select2
+                  value={formData.bin_id}
+                  onChange={(val) => setFormData({ ...formData, ...syncBinLocation(val) })}
+                  options={[
+                    { value: '', label: '-- Pilih Lokasi Bin --' },
+                    ...availableBins.map((bin) => ({
+                      value: bin.id.toString(),
+                      label: bin.full_path || `${bin.code} - ${bin.name}`,
+                    })),
+                  ]}
+                  placeholder="Pilih relasi lokasi barang..."
                 />
+                {!availableBins.length && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Belum ada Bin. Tambahkan lokasi di menu Manajemen Lokasi Inventori.
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-1.5">

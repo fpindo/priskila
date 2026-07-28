@@ -261,9 +261,12 @@ export default function AdjustmentsPage() {
                   docs.map((d) => (
                     <tr key={d.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                       <td className="px-5 py-4">
-                        <span className="font-mono text-xs font-bold text-[#F97316] bg-orange-50 dark:bg-orange-950/20 px-2 py-1 rounded-lg">
+                        <button
+                          onClick={() => openView(d)}
+                          className="font-mono text-xs font-bold text-[#F97316] bg-orange-50 dark:bg-orange-950/20 px-2 py-1 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors cursor-pointer"
+                        >
                           {d.nomor_dokumen}
-                        </span>
+                        </button>
                       </td>
                       <td className="px-5 py-4 whitespace-nowrap text-slate-600 dark:text-slate-400">
                         {d.tanggal_adjustment}
