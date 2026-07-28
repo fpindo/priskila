@@ -12,6 +12,7 @@
     "build": "node start-build.js",
     "production": "node start-production.js",
     "start": "node start-production.js",
+    "stop": "node stop-server.js",
     "dev:web": "npm run dev -w frontend",
     "build:web": "npm run build -w frontend",
     "start:web": "npm run start -w frontend",
