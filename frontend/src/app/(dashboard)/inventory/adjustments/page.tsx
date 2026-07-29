@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ApiService } from '@priskila/api';
 import { Card, CardContent, Alert, Button, Loading, Select2 } from '@priskila/ui';
-import { Search, Plus, Eye, Loader2, RefreshCw, X, Trash2, Zap, Scale } from 'lucide-react';
+import { Search, Plus, Eye, Loader2, RefreshCw, X, Trash2, Zap, Scale, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface Warehouse {
   id: number;
@@ -61,8 +61,10 @@ export default function AdjustmentsPage() {
   });
   const [details, setDetails] = useState<DetailItem[]>([emptyDetail()]);
 
-  // View Modal
-  const [viewDoc, setViewDoc] = useState<any>(null);
+  // Inline expand state (tree-folder)
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedDetails, setExpandedDetails] = useState<any[]>([]);
+  const [expandLoading, setExpandLoading] = useState(false);
 
   const [generating, setGenerating] = useState(false);
 
@@ -173,12 +175,25 @@ export default function AdjustmentsPage() {
     }
   };
 
-  const openView = async (doc: AdjustmentItem) => {
+  const toggleExpand = async (doc: AdjustmentItem) => {
+    if (expandedId === doc.id) {
+      setExpandedId(null);
+      setExpandedDetails([]);
+      return;
+    }
+    setExpandedId(doc.id);
+    setExpandLoading(true);
     try {
       const res = await ApiService.get<any>(`/inventory/adjustments/${doc.id}`);
-      if (res.success) setViewDoc(res.data);
+      if (res.success && res.data?.details) {
+        setExpandedDetails(res.data.details);
+      } else {
+        setExpandedDetails([]);
+      }
     } catch {
-      /* ignore */
+      setExpandedDetails([]);
+    } finally {
+      setExpandLoading(false);
     }
   };
 
@@ -259,34 +274,92 @@ export default function AdjustmentsPage() {
                   </tr>
                 ) : (
                   docs.map((d) => (
-                    <tr key={d.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="px-5 py-4">
-                        <button
-                          onClick={() => openView(d)}
-                          className="font-mono text-xs font-bold text-[#F97316] bg-orange-50 dark:bg-orange-950/20 px-2 py-1 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors cursor-pointer"
-                        >
-                          {d.nomor_dokumen}
-                        </button>
-                      </td>
-                      <td className="px-5 py-4 whitespace-nowrap text-slate-600 dark:text-slate-400">
-                        {d.tanggal_adjustment}
-                      </td>
-                      <td className="px-5 py-4 font-semibold">{d.gudang?.nama_gudang || '-'}</td>
-                      <td className="px-5 py-4 text-xs max-w-[200px] truncate">
-                        {d.catatan || '-'}
-                      </td>
-                      <td className="px-5 py-4 text-xs font-semibold text-slate-500">
-                        {d.creator?.name || 'System'}
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        <button
-                          onClick={() => openView(d)}
-                          className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
+                    <React.Fragment key={d.id}>
+                      <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td className="px-5 py-4">
+                          <button
+                            onClick={() => toggleExpand(d)}
+                            className="flex items-center gap-1.5 font-mono text-xs font-bold text-[#F97316] bg-orange-50 dark:bg-orange-950/20 px-2 py-1 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-950/40 transition-colors cursor-pointer"
+                          >
+                            {expandedId === d.id ? (
+                              <ChevronDown className="h-3 w-3 shrink-0" />
+                            ) : (
+                              <ChevronRight className="h-3 w-3 shrink-0" />
+                            )}
+                            {d.nomor_dokumen}
+                          </button>
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-slate-600 dark:text-slate-400">
+                          {d.tanggal_adjustment}
+                        </td>
+                        <td className="px-5 py-4 font-semibold">{d.gudang?.nama_gudang || '-'}</td>
+                        <td className="px-5 py-4 text-xs max-w-[200px] truncate">
+                          {d.catatan || '-'}
+                        </td>
+                        <td className="px-5 py-4 text-xs font-semibold text-slate-500">
+                          {d.creator?.name || 'System'}
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <button
+                            onClick={() => toggleExpand(d)}
+                            className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                      {expandedId === d.id && (
+                        <tr>
+                          <td colSpan={6} className="px-5 py-0">
+                            <div className="ml-4 border-l-2 border-orange-200 dark:border-orange-900/40 pl-4 py-3 mb-2">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                Item Penyesuaian
+                              </p>
+                              {expandLoading ? (
+                                <div className="flex items-center gap-2 py-2">
+                                  <Loader2 className="h-3 w-3 animate-spin text-[#F97316]" />
+                                  <span className="text-xs text-slate-400">Memuat detail...</span>
+                                </div>
+                              ) : expandedDetails.length === 0 ? (
+                                <p className="text-xs text-slate-400 py-2">Tidak ada item.</p>
+                              ) : (
+                                <div className="space-y-0">
+                                  {expandedDetails.map((item: any, idx: number) => (
+                                    <div
+                                      key={item.id}
+                                      className="flex items-center gap-3 py-1.5 text-xs"
+                                    >
+                                      <div className="flex items-center gap-1.5 text-slate-400">
+                                        <span className="inline-block w-3 h-px bg-orange-200 dark:bg-orange-900/40" />
+                                        <span className="font-mono text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                          {idx + 1}
+                                        </span>
+                                      </div>
+                                      <div className="flex-1">
+                                        <span className="font-semibold text-slate-800 dark:text-slate-200">
+                                          {item.barang?.nama_barang || 'N/A'}
+                                        </span>
+                                        <span className="ml-1.5 text-slate-400 text-[10px]">
+                                          {item.barang?.sku}
+                                        </span>
+                                      </div>
+                                      <span
+                                        className={`font-mono font-bold ${
+                                          item.jumlah >= 0 ? 'text-green-600' : 'text-red-500'
+                                        }`}
+                                      >
+                                        {item.jumlah >= 0 ? `+${item.jumlah}` : item.jumlah}{' '}
+                                        {item.barang?.satuan}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))
                 )}
               </tbody>
@@ -453,69 +526,6 @@ export default function AdjustmentsPage() {
         </div>
       )}
 
-      {/* View Detail Modal */}
-      {viewDoc && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-850 pb-3">
-              <h3 className="font-bold text-slate-900 dark:text-slate-50">
-                Detail Adjustment: {viewDoc.nomor_dokumen}
-              </h3>
-              <button
-                onClick={() => setViewDoc(null)}
-                className="p-2 rounded-lg hover:bg-slate-100 text-slate-400"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              <div>
-                <p className="text-slate-400 font-semibold">Gudang</p>
-                <p className="font-bold text-slate-800 dark:text-slate-200">
-                  {viewDoc.gudang?.nama_gudang}
-                </p>
-              </div>
-              <div>
-                <p className="text-slate-400 font-semibold">Tanggal Adjustment</p>
-                <p className="font-semibold text-slate-700 dark:text-slate-350">
-                  {viewDoc.tanggal_adjustment}
-                </p>
-              </div>
-              <div className="col-span-2">
-                <p className="text-slate-400 font-semibold">Catatan / Alasan</p>
-                <p className="text-slate-700 dark:text-slate-300 font-semibold mt-0.5">
-                  {viewDoc.catatan || '-'}
-                </p>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
-              <p className="text-xs text-slate-400 font-semibold mb-2">Item Penyesuaian</p>
-              <div className="divide-y divide-slate-100 dark:divide-slate-850">
-                {viewDoc.details?.map((item: any) => (
-                  <div
-                    key={item.id}
-                    className="py-2.5 flex items-center justify-between text-xs font-semibold"
-                  >
-                    <div>
-                      <p className="text-slate-800 dark:text-slate-200">
-                        {item.barang?.nama_barang}
-                      </p>
-                      <p className="text-slate-400 text-[10px]">{item.barang?.sku}</p>
-                    </div>
-                    <p
-                      className={`font-mono font-bold ${item.jumlah >= 0 ? 'text-green-600' : 'text-red-500'}`}
-                    >
-                      {item.jumlah >= 0 ? `+${item.jumlah}` : item.jumlah} {item.barang?.satuan}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
