@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { ApiService, apiClient } from '@priskila/api';
 import { Card, CardContent, Alert, Badge, Button, Loading, Select2 } from '@priskila/ui';
 import { Search, Plus, Pencil, Trash2, Loader2, Package, RefreshCw, X, Zap, Copy, Upload } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 interface Barang {
   id: number;
@@ -294,144 +294,109 @@ export default function BarangPage() {
         : 'success';
   };
 
-  // Client-side Excel XLSX Parser
-  const parseExcel = (file: File): Promise<any[]> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+  // Client-side Excel XLSX Parser (using exceljs)
+  const parseExcel = async (file: File): Promise<any[]> => {
+    const buffer = await file.arrayBuffer();
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
 
-          if (jsonData.length <= 1) {
-            resolve([]);
-            return;
-          }
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) return [];
 
-          const rawHeaders = jsonData[0].map((h: any) =>
-            String(h || '').trim().toLowerCase()
-          );
-
-          const skuIdx = rawHeaders.findIndex(h => h.includes('sku') || h.includes('kode'));
-          const namaIdx = rawHeaders.findIndex(h => h.includes('nama') || h.includes('name') || h.includes('barang'));
-          const katIdx = rawHeaders.findIndex(h => h.includes('kategori') || h.includes('category'));
-          const satIdx = rawHeaders.findIndex(h => h.includes('satuan') || h.includes('unit'));
-          const minIdx = rawHeaders.findIndex(h => h.includes('min') || h.includes('limit') || h.includes('minimum'));
-          const deskIdx = rawHeaders.findIndex(h => h.includes('deskripsi') || h.includes('description') || h.includes('ket'));
-
-          const parsedItems = [];
-
-          for (let i = 1; i < jsonData.length; i++) {
-            const row = jsonData[i];
-            if (!row || row.length === 0) continue;
-
-            const hasValue = row.some(val => val !== null && val !== undefined && val !== '');
-            if (!hasValue) continue;
-
-            const sku = skuIdx !== -1 ? String(row[skuIdx] || '').trim() : '';
-            const nama_barang = namaIdx !== -1 ? String(row[namaIdx] || '').trim() : '';
-            const kategori = katIdx !== -1 ? String(row[katIdx] || '').trim() : '';
-            const satuan = satIdx !== -1 ? String(row[satIdx] || 'PCS').trim() : 'PCS';
-            const min_stock = minIdx !== -1 ? parseInt(String(row[minIdx] || '0').trim(), 10) || 0 : 0;
-            const deskripsi = deskIdx !== -1 ? String(row[deskIdx] || '').trim() : '';
-
-            if (sku || nama_barang) {
-              parsedItems.push({
-                sku,
-                nama_barang,
-                kategori,
-                satuan,
-                min_stock,
-                deskripsi,
-              });
-            }
-          }
-
-          resolve(parsedItems);
-        } catch (err) {
-          reject(err);
-        }
-      };
-      reader.onerror = (err) => reject(err);
-      reader.readAsArrayBuffer(file);
+    const jsonData: any[][] = [];
+    worksheet.eachRow((row) => {
+      jsonData.push((row.values as any[]).slice(1)); // slice(1) removes the 1-indexed empty cell
     });
+
+    if (jsonData.length <= 1) return [];
+
+    const rawHeaders = jsonData[0].map((h: any) =>
+      String(h || '').trim().toLowerCase()
+    );
+
+    const skuIdx = rawHeaders.findIndex((h: string) => h.includes('sku') || h.includes('kode'));
+    const namaIdx = rawHeaders.findIndex((h: string) => h.includes('nama') || h.includes('name') || h.includes('barang'));
+    const katIdx = rawHeaders.findIndex((h: string) => h.includes('kategori') || h.includes('category'));
+    const satIdx = rawHeaders.findIndex((h: string) => h.includes('satuan') || h.includes('unit'));
+    const minIdx = rawHeaders.findIndex((h: string) => h.includes('min') || h.includes('limit') || h.includes('minimum'));
+    const deskIdx = rawHeaders.findIndex((h: string) => h.includes('deskripsi') || h.includes('description') || h.includes('ket'));
+
+    const parsedItems = [];
+
+    for (let i = 1; i < jsonData.length; i++) {
+      const row = jsonData[i];
+      if (!row || row.length === 0) continue;
+
+      const hasValue = row.some((val: any) => val !== null && val !== undefined && val !== '');
+      if (!hasValue) continue;
+
+      const sku = skuIdx !== -1 ? String(row[skuIdx] || '').trim() : '';
+      const nama_barang = namaIdx !== -1 ? String(row[namaIdx] || '').trim() : '';
+      const kategori = katIdx !== -1 ? String(row[katIdx] || '').trim() : '';
+      const satuan = satIdx !== -1 ? String(row[satIdx] || 'PCS').trim() : 'PCS';
+      const min_stock = minIdx !== -1 ? parseInt(String(row[minIdx] || '0').trim(), 10) || 0 : 0;
+      const deskripsi = deskIdx !== -1 ? String(row[deskIdx] || '').trim() : '';
+
+      if (sku || nama_barang) {
+        parsedItems.push({ sku, nama_barang, kategori, satuan, min_stock, deskripsi });
+      }
+    }
+
+    return parsedItems;
   };
 
-  const appendReferenceSheet = (wb: any) => {
-    const refHeaders = ["Daftar Kategori", "", "Kode Satuan", "Nama Satuan"];
-    const refRows = [];
+  const appendReferenceSheet = (wb: ExcelJS.Workbook) => {
+    const wsRef = wb.addWorksheet('Referensi Kategori & Satuan');
+    wsRef.addRow(["Daftar Kategori", "", "Kode Satuan", "Nama Satuan"]);
     const maxLen = Math.max(availableKategoris.length, availableSatuans.length);
     for (let i = 0; i < maxLen; i++) {
-      refRows.push([
+      wsRef.addRow([
         availableKategoris[i]?.name || "",
         "",
         availableSatuans[i]?.code || "",
         availableSatuans[i]?.name || "",
       ]);
     }
-    const wsRef = XLSX.utils.aoa_to_sheet([refHeaders, ...refRows]);
-    XLSX.utils.book_append_sheet(wb, wsRef, "Referensi Kategori & Satuan");
   };
 
-  const downloadTemplate = () => {
-    const headers = ["SKU", "Nama Barang", "Kategori", "Satuan", "Min Stock", "Deskripsi"];
-    const rows = [
-      ["BRG-SAMPLE-001", "Pipa PVC 2 Inch", "Material", "METER", 5, "Pipa PVC merk Rucika"],
-      ["BRG-SAMPLE-002", "Semen Tiga Roda", "Material", "SAK", 10, "Semen Portland 40kg"],
-      ["BRG-SAMPLE-003", "Helm Safety Orange", "APD", "PCS", 2, "Helm keselamatan proyek"]
-    ];
-    
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Template");
-    appendReferenceSheet(wb);
-    
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([wbout], { type: 'application/octet-stream' });
+  const triggerDownload = async (wb: ExcelJS.Workbook, filename: string) => {
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "template_import_barang.xlsx");
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
-  const downloadExistingData = () => {
+  const downloadTemplate = async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Template');
+    ws.addRow(["SKU", "Nama Barang", "Kategori", "Satuan", "Min Stock", "Deskripsi"]);
+    ws.addRow(["BRG-SAMPLE-001", "Pipa PVC 2 Inch", "Material", "METER", 5, "Pipa PVC merk Rucika"]);
+    ws.addRow(["BRG-SAMPLE-002", "Semen Tiga Roda", "Material", "SAK", 10, "Semen Portland 40kg"]);
+    ws.addRow(["BRG-SAMPLE-003", "Helm Safety Orange", "APD", "PCS", 2, "Helm keselamatan proyek"]);
+    appendReferenceSheet(wb);
+    await triggerDownload(wb, 'template_import_barang.xlsx');
+  };
+
+  const downloadExistingData = async () => {
     if (itemsLookup.length === 0) {
       alert("Tidak ada data barang untuk diunduh.");
       return;
     }
-    
-    const headers = ["SKU", "Nama Barang", "Kategori", "Satuan", "Min Stock", "Deskripsi"];
-    const rows = itemsLookup.map((b) => [
-      b.sku,
-      b.nama_barang,
-      b.kategori,
-      b.satuan,
-      b.min_stock,
-      b.bin_location || '',
-    ]);
-
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Data Barang Aktif");
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Data Barang Aktif');
+    ws.addRow(["SKU", "Nama Barang", "Kategori", "Satuan", "Min Stock", "Deskripsi"]);
+    itemsLookup.forEach((b) => {
+      ws.addRow([b.sku, b.nama_barang, b.kategori, b.satuan, b.min_stock, b.bin_location || '']);
+    });
     appendReferenceSheet(wb);
-
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([wbout], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "data_barang_saat_ini.xlsx");
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    await triggerDownload(wb, 'data_barang_saat_ini.xlsx');
   };
 
   return (
