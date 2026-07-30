@@ -30,6 +30,8 @@ import {
   ClipboardList,
   Tags,
   MapPin,
+  Shield,
+  Users,
 } from 'lucide-react';
 
 interface MenuItem {
@@ -79,7 +81,11 @@ const menuGroups: MenuGroup[] = [
   },
   {
     title: 'Sistem',
-    items: [{ name: 'Pengaturan', path: '/settings', icon: Settings, role: 'admin' }],
+    items: [
+      { name: 'Pengaturan', path: '/settings', icon: Settings, role: 'admin' },
+      { name: 'Hak Akses & Pengguna', path: '/settings/users', icon: Users, role: 'admin' },
+      { name: 'Role & Permission', path: '/settings/roles', icon: Shield, role: 'admin' },
+    ],
   },
 ];
 

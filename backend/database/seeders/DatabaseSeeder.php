@@ -26,6 +26,9 @@ class DatabaseSeeder extends Seeder
             'manage-transactions',
             'approve-pemakaian',
             'view-reports',
+            'manage-settings',
+            'manage-users',
+            'manage-adjustments',
         ];
 
         foreach ($permissions as $permissionName) {
@@ -150,6 +153,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             SettingSeeder::class,
             WarehouseSeeder::class,
+            LocationHierarchySeeder::class,
             KonversiSatuanSeeder::class,
         ]);
     }

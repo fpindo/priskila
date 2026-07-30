@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\StockOpnameController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\TransferGudangController;
 use App\Http\Controllers\Api\TwoFactorAuthController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WarehouseController;
 use Illuminate\Support\Facades\Route;
@@ -50,6 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('barang', BarangController::class);
     Route::apiResource('suppliers', SupplierController::class);
     Route::apiResource('users', UserController::class);
+    Route::apiResource('roles', RoleController::class);
     Route::apiResource('kategoris', KategoriController::class);
     Route::apiResource('conversions', KonversiSatuanController::class);
     Route::apiResource('satuans', SatuanController::class);
@@ -121,6 +123,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Location Hierarchy
     Route::prefix('locations')->group(function () {
         Route::get('/warehouses', [LocationController::class, 'getWarehouses']);
+        Route::get('/zones', [LocationController::class, 'getAllZones']);
+        Route::get('/racks', [LocationController::class, 'getAllRacks']);
+        Route::get('/shelves', [LocationController::class, 'getAllShelves']);
         Route::get('/bins', [LocationController::class, 'getAllBins']);
         Route::get('/{warehouseId}/zones', [LocationController::class, 'getZones']);
         Route::get('/{zoneId}/racks', [LocationController::class, 'getRacks']);

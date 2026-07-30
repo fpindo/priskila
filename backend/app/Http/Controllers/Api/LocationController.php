@@ -69,6 +69,24 @@ class LocationController extends Controller
         return $this->successResponse($bins, 'Bins retrieved successfully');
     }
 
+    public function getAllZones(): JsonResponse
+    {
+        $zones = Zone::with('warehouse')->get();
+        return $this->successResponse($zones, 'Zones retrieved successfully');
+    }
+
+    public function getAllRacks(): JsonResponse
+    {
+        $racks = Rack::with('zone.warehouse')->get();
+        return $this->successResponse($racks, 'Racks retrieved successfully');
+    }
+
+    public function getAllShelves(): JsonResponse
+    {
+        $shelves = Shelf::with('rack.zone.warehouse')->get();
+        return $this->successResponse($shelves, 'Shelves retrieved successfully');
+    }
+
     // ── Zone CRUD ──
 
     public function storeZone(Request $request): JsonResponse

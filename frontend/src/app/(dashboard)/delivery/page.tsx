@@ -5,7 +5,7 @@ import QRCode from 'qrcode';
 import { ApiService } from '@priskila/api';
 import { Alert, Badge, Button, Card, CardContent, Loading, Select2 } from '@priskila/ui';
 import { DeliveryOrder } from '@priskila/types';
-import { Eye, PackageCheck, Plus, RefreshCw, Search, Send, Truck, X, Loader2, Zap } from 'lucide-react';
+import { Eye, PackageCheck, Plus, RefreshCw, Search, Send, Truck, X, Loader2, Zap, Package } from 'lucide-react';
 
 interface Barang {
   id: number;
@@ -54,6 +54,7 @@ export default function DeliveryPage() {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [shipping, setShipping] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [activeFormTab, setActiveFormTab] = useState<'info' | 'items'>('info');
 
   const generateCode = async () => {
     setGenerating(true);
@@ -109,6 +110,7 @@ export default function DeliveryPage() {
     });
     setDetails([newDetail()]);
     setFormError(null);
+    setActiveFormTab('info');
     setCreateOpen(true);
     generateCode();
   };
@@ -256,153 +258,274 @@ export default function DeliveryPage() {
         </CardContent>
       </Card>
       {createOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4 pt-8">
-          <div className="mx-auto mb-8 w-full max-w-2xl rounded-2xl bg-white shadow-2xl dark:bg-slate-900">
-            <div className="flex items-center justify-between border-b p-5">
-              <h3 className="font-bold">Buat Delivery Order</h3>
-              <button onClick={() => setCreateOpen(false)} className="p-2">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4 pt-8 flex items-center justify-center">
+          <div className="mx-auto w-full max-w-2xl rounded-2xl bg-white shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 p-5 shrink-0">
+              <h3 className="font-bold text-slate-900 dark:text-slate-50">Buat Delivery Order</h3>
+              <button onClick={() => setCreateOpen(false)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400">
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <form onSubmit={save} className="space-y-5 p-6">
+
+            {/* Tabs */}
+            <div className="px-6 pt-1 pb-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0">
+              <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <button
+                  type="button"
+                  onClick={() => setActiveFormTab('info')}
+                  className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all focus:outline-none -mb-px shrink-0 ${
+                    activeFormTab === 'info'
+                      ? 'border-[#F97316] text-[#F97316]'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                  }`}
+                >
+                  <Truck className="h-4 w-4" />
+                  Informasi Pengiriman
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveFormTab('items')}
+                  className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all focus:outline-none -mb-px shrink-0 ${
+                    activeFormTab === 'items'
+                      ? 'border-[#F97316] text-[#F97316]'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                  }`}
+                >
+                  <Package className="h-4 w-4" />
+                  Item Barang ({details.filter(d => d.barang_id).length})
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={save} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
               {formError && (
                 <Alert variant="danger" title="Error">
                   {formError}
                 </Alert>
               )}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="text-xs font-semibold">
-                  No. Dokumen *
-                  <div className="mt-1 flex gap-2">
-                    <input
+
+              {/* TAB 1: Informasi Pengiriman */}
+              {activeFormTab === 'info' && (
+                <div className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        No. Dokumen *
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          required
+                          value={form.nomor_dokumen}
+                          onChange={(e) => setForm({ ...form, nomor_dokumen: e.target.value })}
+                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-950 focus:ring-2 focus:ring-[#F97316]/40 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          disabled={generating}
+                          onClick={generateCode}
+                          className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 text-[#F97316] hover:bg-orange-50 dark:hover:bg-orange-950/10 flex items-center justify-center gap-1 disabled:opacity-50 text-xs font-semibold shrink-0"
+                        >
+                          {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                          Auto
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Tanggal Kirim *
+                      </label>
+                      <input
+                        required
+                        type="date"
+                        value={form.tanggal_delivery}
+                        onChange={(e) => setForm({ ...form, tanggal_delivery: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-955 focus:ring-2 focus:ring-[#F97316]/40 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Project
+                      </label>
+                      <Select2
+                        value={form.project_id}
+                        onChange={(val) => setForm({ ...form, project_id: val })}
+                        options={projects.map((project) => ({ value: project.id, label: project.nama_project }))}
+                        placeholder="-- Tanpa Project --"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Nama Penerima *
+                      </label>
+                      <input
+                        required
+                        value={form.nama_penerima}
+                        onChange={(e) => setForm({ ...form, nama_penerima: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-950 focus:ring-2 focus:ring-[#F97316]/40 focus:outline-none"
+                        placeholder="Nama PIC Penerima di Lapangan"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Alamat Tujuan *
+                    </label>
+                    <textarea
                       required
-                      value={form.nomor_dokumen}
-                      onChange={(e) => setForm({ ...form, nomor_dokumen: e.target.value })}
-                      className="w-full rounded-xl border px-3 py-2"
+                      rows={2}
+                      value={form.alamat_tujuan}
+                      onChange={(e) => setForm({ ...form, alamat_tujuan: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-950 focus:ring-2 focus:ring-[#F97316]/40 focus:outline-none"
+                      placeholder="Alamat pengiriman barang..."
                     />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Catatan
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={form.catatan}
+                      onChange={(e) => setForm({ ...form, catatan: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-955 focus:ring-2 focus:ring-[#F97316]/40 focus:outline-none"
+                      placeholder="Catatan tambahan..."
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: Item Barang */}
+              {activeFormTab === 'items' && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-550">
+                      Daftar Barang yang Dikirim
+                    </h4>
                     <button
                       type="button"
-                      disabled={generating}
-                      onClick={generateCode}
-                      className="rounded-xl border px-3 text-[#F97316] flex items-center justify-center gap-1 disabled:opacity-50 text-xs font-semibold"
+                      onClick={() => setDetails([...details, newDetail()])}
+                      className="text-xs font-bold text-[#F97316] hover:text-orange-600 transition-colors"
                     >
-                      {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-                      Auto
+                      + Tambah Baris Barang
                     </button>
                   </div>
-                </label>
-                <label className="text-xs font-semibold">
-                  Tanggal Kirim *
-                  <input
-                    required
-                    type="date"
-                    value={form.tanggal_delivery}
-                    onChange={(e) => setForm({ ...form, tanggal_delivery: e.target.value })}
-                    className="mt-1 w-full rounded-xl border px-3 py-2"
-                  />
-                </label>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="text-xs font-semibold">
-                  Project
-                  <Select2
-                    value={form.project_id}
-                    onChange={(val) => setForm({ ...form, project_id: val })}
-                    options={projects.map((project) => ({ value: project.id, label: project.nama_project }))}
-                    placeholder="-- Tanpa Project --"
-                    className="mt-1"
-                  />
-                </label>
-                <label className="text-xs font-semibold">
-                  Nama Penerima *
-                  <input
-                    required
-                    value={form.nama_penerima}
-                    onChange={(e) => setForm({ ...form, nama_penerima: e.target.value })}
-                    className="mt-1 w-full rounded-xl border px-3 py-2"
-                  />
-                </label>
-              </div>
-              <label className="block text-xs font-semibold">
-                Alamat Tujuan *
-                <textarea
-                  required
-                  rows={2}
-                  value={form.alamat_tujuan}
-                  onChange={(e) => setForm({ ...form, alamat_tujuan: e.target.value })}
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </label>
-              <label className="block text-xs font-semibold">
-                Catatan
-                <textarea
-                  rows={2}
-                  value={form.catatan}
-                  onChange={(e) => setForm({ ...form, catatan: e.target.value })}
-                  className="mt-1 w-full rounded-xl border px-3 py-2"
-                />
-              </label>
-              <div className="border-t pt-4">
-                <div className="mb-3 flex justify-between">
-                  <h4 className="text-sm font-bold">Daftar Barang</h4>
+
+                  <div className="space-y-3">
+                    {details.map((detail, index) => (
+                      <div key={index} className="flex gap-3 items-start bg-slate-50/50 dark:bg-slate-800/20 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <div className="flex-1 min-w-0">
+                          <Select2
+                            required
+                            value={detail.barang_id}
+                            onChange={(val) =>
+                              setDetails(
+                                details.map((row, i) =>
+                                  i === index ? { ...row, barang_id: val } : row
+                                )
+                              )
+                            }
+                            options={barang.map((item) => ({ value: item.id, label: `${item.nama_barang} (${item.sku})` }))}
+                            placeholder="-- Pilih Barang --"
+                          />
+                        </div>
+                        <div className="w-28">
+                          <input
+                            required
+                            type="number"
+                            min="1"
+                            value={detail.jumlah}
+                            onChange={(e) =>
+                              setDetails(
+                                details.map((row, i) =>
+                                  i === index ? { ...row, jumlah: Number(e.target.value) } : row
+                                )
+                              )
+                            }
+                            placeholder="Qty"
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm bg-white dark:bg-slate-950 focus:ring-2 focus:ring-[#F97316]/40 focus:outline-none"
+                          />
+                        </div>
+                        {details.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setDetails(details.filter((_, i) => i !== index))}
+                            className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-xl shrink-0 transition-colors mt-0.5"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </form>
+
+            {/* Action Bar */}
+            <div className="flex gap-3 px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 rounded-b-2xl">
+              {activeFormTab === 'info' ? (
+                <>
                   <button
                     type="button"
-                    onClick={() => setDetails([...details, newDetail()])}
-                    className="text-xs font-bold text-[#F97316]"
+                    onClick={() => setCreateOpen(false)}
+                    className="flex-1 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
                   >
-                    + Tambah Barang
+                    Batal
                   </button>
-                </div>
-                {details.map((detail, index) => (
-                  <div key={index} className="mb-3 flex gap-2">
-                    <Select2
-                      required
-                      value={detail.barang_id}
-                      onChange={(val) =>
-                        setDetails(
-                          details.map((row, i) =>
-                            i === index ? { ...row, barang_id: val } : row
-                          )
-                        )
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Basic validation before shifting tabs
+                      if (!form.nomor_dokumen || !form.tanggal_delivery || !form.nama_penerima || !form.alamat_tujuan) {
+                        setFormError("Mohon lengkapi semua field bertanda bintang (*)");
+                        return;
                       }
-                      options={barang.map((item) => ({ value: item.id, label: `${item.nama_barang} (${item.sku})` }))}
-                      placeholder="-- Pilih Barang --"
-                    />
-                    <input
-                      required
-                      type="number"
-                      min="1"
-                      value={detail.jumlah}
-                      onChange={(e) =>
-                        setDetails(
-                          details.map((row, i) =>
-                            i === index ? { ...row, jumlah: Number(e.target.value) } : row
-                          )
-                        )
+                      setFormError(null);
+                      setActiveFormTab('items');
+                    }}
+                    className="flex-1 py-2.5 text-sm font-semibold rounded-xl bg-[#F97316] hover:bg-orange-600 text-white transition-colors"
+                  >
+                    Lanjut ke Barang
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormError(null);
+                      setActiveFormTab('info');
+                    }}
+                    className="flex-1 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+                  >
+                    Kembali
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const incomplete = details.some(d => !d.barang_id || !d.jumlah);
+                      if (incomplete) {
+                        setFormError("Mohon lengkapi pilihan barang dan jumlahnya.");
+                        return;
                       }
-                      className="w-24 rounded-xl border px-3 py-2"
-                    />
-                    {details.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setDetails(details.filter((_, i) => i !== index))}
-                        className="px-3 text-red-500"
-                      >
-                        Hapus
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-end gap-2 border-t pt-4">
-                <Button type="button" variant="secondary" onClick={() => setCreateOpen(false)}>
-                  Batal
-                </Button>
-                <Button type="submit" variant="primary" disabled={saving}>
-                  {saving ? 'Menyimpan...' : 'Simpan Delivery Order'}
-                </Button>
-              </div>
-            </form>
+                      (document.getElementById('barang-form') as HTMLFormElement | null)?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                      // Trigger normal submit trigger since the button is not type submit
+                      save(new Event('submit') as any);
+                    }}
+                    disabled={saving}
+                    className="flex-1 py-2.5 text-sm font-semibold rounded-xl bg-[#F97316] hover:bg-orange-600 text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Simpan Delivery Order
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

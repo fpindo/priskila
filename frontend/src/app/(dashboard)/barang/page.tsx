@@ -3,7 +3,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ApiService, apiClient } from '@priskila/api';
 import { Card, CardContent, Alert, Badge, Button, Loading, Select2 } from '@priskila/ui';
-import { Search, Plus, Pencil, Trash2, Loader2, Package, RefreshCw, X, Zap, Copy, Upload, LayoutGrid, List } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, Loader2, Package, RefreshCw, X, Zap, Copy, Upload, LayoutGrid, List, MapPin, Image as ImageIcon } from 'lucide-react';
+import Link from 'next/link';
 import { XlsxWriter, parseXlsx } from '@/lib/xlsx-writer';
 
 interface Barang {
@@ -70,6 +71,7 @@ export default function BarangPage() {
   const [generating, setGenerating] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [pageSize, setPageSize] = useState<8 | 16 | 24>(8);
+  const [activeTab, setActiveTab] = useState<'identitas' | 'lokasi' | 'harga'>('identitas');
 
   // New features state
   const [itemsLookup, setItemsLookup] = useState<Barang[]>([]);
@@ -80,6 +82,8 @@ export default function BarangPage() {
   const [importItems, setImportItems] = useState<any[]>([]);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [warehousesCount, setWarehousesCount] = useState<number>(0);
+  const [maxDepth, setMaxDepth] = useState<number>(5);
 
   const generateCode = async () => {
     setGenerating(true);
@@ -149,11 +153,98 @@ export default function BarangPage() {
     }
   };
 
-  const fetchBins = async () => {
+  const fetchBins = async (depthVal: number) => {
+    let endpoint = '/locations/bins';
+    if (depthVal === 1) endpoint = '/locations/warehouses';
+    else if (depthVal === 2) endpoint = '/locations/zones';
+    else if (depthVal === 3) endpoint = '/locations/racks';
+    else if (depthVal === 4) endpoint = '/locations/shelves';
+
     try {
-      const res = await ApiService.get<LocationBin[]>('/locations/bins');
+      console.log('fetchBins calling endpoint:', endpoint);
+      const res = await ApiService.get<any[]>(endpoint);
+      console.log('fetchBins response:', endpoint, res);
       if (res.success && res.data) {
-        setAvailableBins(res.data);
+        const formatted = res.data.map((item: any) => {
+          const name = item.name || item.nama_gudang || '';
+          const code = item.code || item.kode_gudang || '';
+          let full_path = item.full_path || '';
+          if (!full_path) {
+            const formatZone = (z: string) => {
+              if (!z) return '';
+              if (z.toLowerCase().startsWith('zone') || z.toLowerCase().startsWith('zona')) return z;
+              return `Zone ${z}`;
+            };
+            const formatRack = (r: string) => {
+              if (!r) return '';
+              if (r.toLowerCase().startsWith('rack') || r.toLowerCase().startsWith('rak')) return r;
+              return `Rack ${r}`;
+            };
+            const formatShelf = (s: string) => {
+              if (!s) return '';
+              if (s.toLowerCase().startsWith('shelf')) return s;
+              return `Shelf ${s}`;
+            };
+
+            const wName = item.warehouse?.nama_gudang || item.zone?.warehouse?.nama_gudang || item.rack?.zone?.warehouse?.nama_gudang || '';
+            const zName = formatZone(item.zone?.name || item.rack?.zone?.name || '');
+            const rName = formatRack(item.rack?.name || (depthVal === 3 ? name : ''));
+            const sName = formatShelf(depthVal === 4 ? name : '');
+
+            const parts = [wName];
+            if (zName) parts.push(zName);
+            if (rName) parts.push(rName);
+            if (sName) parts.push(sName);
+
+            if (depthVal === 1) {
+              full_path = name;
+            } else {
+              if (depthVal === 2) {
+                const formattedZone = formatZone(name);
+                if (!parts.includes(formattedZone)) {
+                  parts.push(formattedZone);
+                }
+              }
+              full_path = parts.filter(Boolean).join(' - ');
+            }
+          }
+          return {
+            id: item.id,
+            code,
+            name,
+            full_path,
+          };
+        });
+        console.log('fetchBins formatted results:', formatted);
+        setAvailableBins(formatted);
+      }
+    } catch (err) {
+      console.error('fetchBins error for endpoint:', endpoint, err);
+    }
+  };
+
+  const fetchMaxDepthAndBins = async () => {
+    try {
+      const res = await ApiService.get<any[]>('/settings');
+      let depthVal = 5;
+      if (res.success && res.data) {
+        const found = res.data.find((s: any) => s.key === 'location_max_depth');
+        if (found?.value?.depth) {
+          depthVal = Number(found.value.depth);
+          setMaxDepth(depthVal);
+        }
+      }
+      fetchBins(depthVal);
+    } catch {
+      fetchBins(5);
+    }
+  };
+
+  const fetchWarehousesCount = async () => {
+    try {
+      const res = await ApiService.get<any[]>('/locations/warehouses');
+      if (res.success && res.data) {
+        setWarehousesCount(res.data.length);
       }
     } catch {
       /* ignore */
@@ -201,11 +292,13 @@ export default function BarangPage() {
     fetchLookupItems();
     fetchKategoris();
     fetchSatuans();
-    fetchBins();
+    fetchMaxDepthAndBins();
+    fetchWarehousesCount();
   }, [fetchItems]);
 
   const openCreate = () => {
     setEditId(null);
+    setActiveTab('identitas');
     setFormData({
       ...emptyForm,
       kategori: availableKategoris[0]?.name || '',
@@ -218,6 +311,7 @@ export default function BarangPage() {
 
   const openClone = (b: Barang) => {
     setEditId(null);
+    setActiveTab('identitas');
     setFormData({
       sku: '',
       nama_barang: `${b.nama_barang} (Copy)`,
@@ -239,6 +333,7 @@ export default function BarangPage() {
 
   const openEdit = (b: Barang) => {
     setEditId(b.id);
+    setActiveTab('identitas');
     setFormData({
       sku: b.sku,
       nama_barang: b.nama_barang,
@@ -413,6 +508,69 @@ export default function BarangPage() {
     ]);
     wb.addSheet('Referensi Kategori & Satuan', appendReferenceRows());
     await triggerDownload(wb, 'data_barang_saat_ini.xlsx');
+  };
+
+  const locationLabels: Record<number, { label: string; placeholder: string; selectPlaceholder: string }> = {
+    1: { label: 'Lokasi Gudang (Warehouse Location)', placeholder: '-- Pilih Lokasi Gudang --', selectPlaceholder: 'Pilih lokasi gudang...' },
+    2: { label: 'Lokasi Zone (Zone Location)', placeholder: '-- Pilih Lokasi Zone --', selectPlaceholder: 'Pilih lokasi zone...' },
+    3: { label: 'Lokasi Rak (Rack Location)', placeholder: '-- Pilih Lokasi Rak --', selectPlaceholder: 'Pilih lokasi rak...' },
+    4: { label: 'Lokasi Shelf (Shelf Location)', placeholder: '-- Pilih Lokasi Shelf --', selectPlaceholder: 'Pilih lokasi shelf...' },
+    5: { label: 'Lokasi Rak (Bin Location)', placeholder: '-- Pilih Lokasi Bin --', selectPlaceholder: 'Pilih lokasi bin...' },
+  };
+  const locText = locationLabels[maxDepth] || locationLabels[5];
+
+  const formatRupiah = (value: string | number) => {
+    if (!value && value !== 0) return '';
+    const numStr = value.toString().replace(/[^0-9]/g, '');
+    return numStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  };
+
+  const compressImage = (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const max_size = 800;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > max_size) {
+              height *= max_size / width;
+              width = max_size;
+            }
+          } else {
+            if (height > max_size) {
+              width *= max_size / height;
+              height = max_size;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                resolve(blob);
+              } else {
+                reject(new Error('Canvas conversion failed'));
+              }
+            },
+            'image/jpeg',
+            0.7
+          );
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
   };
 
   return (
@@ -601,8 +759,13 @@ export default function BarangPage() {
                     >
                       <td className="px-5 py-4">
                         {b.image_url ? (
-                          <div className="h-10 w-10 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white p-0.5 flex items-center justify-center shrink-0">
-                            <img src={b.image_url} alt={b.nama_barang} className="h-full w-full object-contain" />
+                          <div className="relative group inline-block">
+                            <div className="h-10 w-10 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white flex items-center justify-center shrink-0 cursor-zoom-in">
+                              <img src={b.image_url} alt={b.nama_barang} className="h-full w-full object-cover" />
+                            </div>
+                            <div className="absolute left-12 top-1/2 -translate-y-1/2 z-50 hidden group-hover:block w-48 h-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-1.5 pointer-events-none">
+                              <img src={b.image_url} alt={b.nama_barang} className="w-full h-full object-cover rounded-xl" />
+                            </div>
                           </div>
                         ) : (
                           <div className="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 shrink-0">
@@ -618,6 +781,11 @@ export default function BarangPage() {
                       <td className="px-5 py-4 font-medium text-slate-800 dark:text-slate-200">
                         <div>
                           <span className="block">{b.nama_barang}</span>
+                          {b.bin_location && (
+                            <span className="text-[10px] text-slate-400 mt-0.5 block" title={b.bin_location}>
+                              📍 {b.bin_location.split(' - ')[0]}
+                            </span>
+                          )}
                           {b.conversions && b.conversions.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1.5">
                               {b.conversions.map((conv) => (
@@ -700,7 +868,7 @@ export default function BarangPage() {
                         <img
                           src={b.image_url}
                           alt={b.nama_barang}
-                          className="h-full w-full object-contain p-2"
+                          className="h-full w-full object-cover"
                         />
                       ) : (
                         <Package className="h-10 w-10 text-slate-300" />
@@ -757,7 +925,7 @@ export default function BarangPage() {
                           className="text-[10px] text-slate-400 truncate"
                           title={b.bin_location}
                         >
-                          📍 {b.bin_location}
+                          📍 {b.bin_location.split(' - ')[0]}
                         </p>
                       )}
 
@@ -952,8 +1120,8 @@ export default function BarangPage() {
       {/* Edit/Create Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 dark:border-slate-800">
+          <div className="w-full max-w-3xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
               <h3 className="font-bold text-slate-900 dark:text-slate-50">
                 {editId ? 'Edit Barang' : 'Tambah Barang Baru'}
               </h3>
@@ -964,193 +1132,232 @@ export default function BarangPage() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <form onSubmit={handleSave} className="p-6 space-y-5">
+
+            {/* Tabs */}
+            <div className="px-6 pt-1 pb-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0">
+              <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('identitas')}
+                  className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all focus:outline-none -mb-px shrink-0 ${
+                    activeTab === 'identitas'
+                      ? 'border-[#F97316] text-[#F97316]'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                  }`}
+                >
+                  <Package className="h-4 w-4" />
+                  Identitas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('lokasi')}
+                  className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all focus:outline-none -mb-px shrink-0 ${
+                    activeTab === 'lokasi'
+                      ? 'border-[#F97316] text-[#F97316]'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                  }`}
+                >
+                  <MapPin className="h-4 w-4" />
+                  Lokasi & Stok
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('harga')}
+                  className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all focus:outline-none -mb-px shrink-0 ${
+                    activeTab === 'harga'
+                      ? 'border-[#F97316] text-[#F97316]'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                  }`}
+                >
+                  <ImageIcon className="h-4 w-4" />
+                  Harga & Foto
+                </button>
+              </div>
+            </div>
+
+            <form id="barang-form" onSubmit={handleSave} className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
               {formError && (
                 <Alert variant="danger" title="Error">
                   {formError}
                 </Alert>
               )}
 
-              {/* Copy from existing data selector (Only for new item creation) */}
-              {!editId && itemsLookup.length > 0 && (
-                <div className="space-y-1.5 p-3 rounded-xl bg-orange-50/50 dark:bg-orange-950/10 border border-orange-100 dark:border-orange-950/30">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Salin dari Barang Lain (Opsional)
-                  </label>
-                  <Select2
-                    value=""
-                    onChange={(val) => {
-                      if (!val) return;
-                      const selectedItem = itemsLookup.find((b) => b.id === Number(val));
-                      if (selectedItem) {
-                        setFormData((prev) => ({
-                          ...prev,
-                          nama_barang: `${selectedItem.nama_barang} (Salinan)`,
-                          kategori: selectedItem.kategori,
-                          satuan: selectedItem.satuan,
-                          min_stock: selectedItem.min_stock,
-                          harga_satuan: selectedItem.harga_satuan ? selectedItem.harga_satuan.toString() : '',
-                          brand: selectedItem.brand || '',
-                          bin_id: selectedItem.bin_id ? String(selectedItem.bin_id) : '',
-                          bin_location: selectedItem.bin_location || '',
-                        }));
-                      }
-                    }}
-                    options={[
-                      { value: '', label: '-- Pilih Barang Untuk Disalin --' },
-                      ...itemsLookup.slice(0, 10).map((b) => ({
-                        value: b.id.toString(),
-                        label: `${b.nama_barang} (${b.sku})`,
-                      })),
-                    ]}
-                    placeholder="Pilih barang untuk disalin datanya..."
-                  />
+              {/* TAB: Identitas */}
+              {activeTab === 'identitas' && (
+                <div className="space-y-4">
+
+
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-550 border-b border-slate-100 dark:border-slate-800 pb-1">
+                      Identitas Barang
+                    </h4>
+                    
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        SKU *
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          required
+                          value={formData.sku}
+                          onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
+                          placeholder="BRG-001"
+                        />
+                        <button
+                          type="button"
+                          disabled={generating}
+                          onClick={generateCode}
+                          className="px-3 border border-slate-200 dark:border-slate-700 rounded-xl text-[#F97316] hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center gap-1 disabled:opacity-50 text-xs font-semibold shrink-0"
+                        >
+                          {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                          Auto
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Nama Barang *
+                      </label>
+                      <input
+                        required
+                        value={formData.nama_barang}
+                        onChange={(e) => setFormData({ ...formData, nama_barang: e.target.value })}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-955 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
+                        placeholder="Pipa PVC 2 Inch, Kabel, Semen..."
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Brand / Merk
+                      </label>
+                      <input
+                        value={formData.brand}
+                        onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
+                        placeholder="Schneider, Philips, dll..."
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          Kategori *
+                        </label>
+                        {availableKategoris.length > 0 ? (
+                          <Select2
+                            required
+                            value={formData.kategori}
+                            onChange={(val) => setFormData({ ...formData, kategori: val })}
+                            options={availableKategoris.map((c) => ({
+                              value: c.name,
+                              label: c.name,
+                            }))}
+                            placeholder="Kategori"
+                          />
+                        ) : (
+                          <input
+                            required
+                            value={formData.kategori}
+                            onChange={(e) => setFormData({ ...formData, kategori: e.target.value })}
+                            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
+                            placeholder="Kategori..."
+                          />
+                        )}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          Satuan *
+                        </label>
+                        <Select2
+                          required
+                          value={formData.satuan}
+                          onChange={(val) => setFormData({ ...formData, satuan: val })}
+                          options={availableSatuans.length > 0 ? availableSatuans.map(s => ({
+                            value: s.code,
+                            label: `${s.code} - ${s.name}`,
+                          })) : [
+                            { value: 'PCS', label: 'PCS' },
+                            { value: 'SET', label: 'SET' },
+                            { value: 'BOX', label: 'BOX' },
+                            { value: 'ROLL', label: 'ROLL' },
+                            { value: 'METER', label: 'METER' },
+                            { value: 'KG', label: 'KG' },
+                            { value: 'LITER', label: 'LITER' },
+                            { value: 'UNIT', label: 'UNIT' },
+                          ]}
+                          placeholder="Satuan"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
-              {/* 2-Column Grid Layout */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* Left Column: Identitas Barang */}
+              {/* TAB: Lokasi & Stok */}
+              {activeTab === 'lokasi' && (
                 <div className="space-y-4">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-550 border-b border-slate-100 dark:border-slate-800 pb-1">
-                    Identitas Barang
+                    Lokasi & Stok
                   </h4>
-                  
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      SKU *
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        required
-                        value={formData.sku}
-                        onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                        className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
-                        placeholder="BRG-001"
-                      />
-                      <button
-                        type="button"
-                        disabled={generating}
-                        onClick={generateCode}
-                        className="px-3 border border-slate-200 dark:border-slate-700 rounded-xl text-[#F97316] hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center gap-1 disabled:opacity-50 text-xs font-semibold shrink-0"
-                      >
-                        {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-                        Auto
-                      </button>
-                    </div>
-                  </div>
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Nama Barang *
+                      {locText.label}
                     </label>
-                    <input
-                      required
-                      value={formData.nama_barang}
-                      onChange={(e) => setFormData({ ...formData, nama_barang: e.target.value })}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
-                      placeholder="Pipa PVC 2 Inch, Kabel, Semen..."
+                    <Select2
+                      value={maxDepth === 5 ? (formData.bin_id || '') : (formData.bin_location || '')}
+                      onChange={(val) => {
+                        if (maxDepth === 5) {
+                          setFormData({ ...formData, ...syncBinLocation(val) });
+                        } else {
+                          setFormData({
+                            ...formData,
+                            bin_id: '',
+                            bin_location: val,
+                          });
+                        }
+                      }}
+                      options={[
+                        { value: '', label: locText.placeholder },
+                        ...availableBins.map((bin) => ({
+                          value: maxDepth === 5 ? bin.id.toString() : (bin.full_path || ''),
+                          label: bin.full_path || `${bin.code} - ${bin.name}`,
+                        })),
+                      ]}
+                      placeholder={locText.selectPlaceholder}
                     />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Brand / Merk
-                    </label>
-                    <input
-                      value={formData.brand}
-                      onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
-                      placeholder="Schneider, Philips, dll..."
-                    />
+                    {!availableBins.length && (
+                      <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 leading-relaxed">
+                        {warehousesCount === 0 ? (
+                          <>
+                            Belum ada Gudang aktif. Tambahkan gudang terlebih dahulu di menu{' '}
+                            <Link href="/warehouses" className="underline font-semibold hover:text-amber-700">
+                              Master Gudang
+                            </Link>.
+                          </>
+                        ) : (
+                          <>
+                            Belum ada lokasi/bin terdaftar. Silakan tambahkan lokasi di menu{' '}
+                            <Link href="/locations" className="underline font-semibold hover:text-amber-700">
+                              Lokasi Inventori
+                            </Link>{' '}
+                            atau sesuaikan Kedalaman Hierarki Lokasi di menu{' '}
+                            <Link href="/settings" className="underline font-semibold hover:text-amber-700">
+                              Pengaturan
+                            </Link>.
+                          </>
+                        )}
+                      </p>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        Kategori *
-                      </label>
-                      {availableKategoris.length > 0 ? (
-                        <Select2
-                          required
-                          value={formData.kategori}
-                          onChange={(val) => setFormData({ ...formData, kategori: val })}
-                          options={availableKategoris.map((c) => ({
-                            value: c.name,
-                            label: c.name,
-                          }))}
-                          placeholder="Kategori"
-                        />
-                      ) : (
-                        <input
-                          required
-                          value={formData.kategori}
-                          onChange={(e) => setFormData({ ...formData, kategori: e.target.value })}
-                          className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
-                          placeholder="Kategori..."
-                        />
-                      )}
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        Satuan *
-                      </label>
-                      <Select2
-                        required
-                        value={formData.satuan}
-                        onChange={(val) => setFormData({ ...formData, satuan: val })}
-                        options={availableSatuans.length > 0 ? availableSatuans.map(s => ({
-                          value: s.code,
-                          label: `${s.code} - ${s.name}`,
-                        })) : [
-                          { value: 'PCS', label: 'PCS' },
-                          { value: 'SET', label: 'SET' },
-                          { value: 'BOX', label: 'BOX' },
-                          { value: 'ROLL', label: 'ROLL' },
-                          { value: 'METER', label: 'METER' },
-                          { value: 'KG', label: 'KG' },
-                          { value: 'LITER', label: 'LITER' },
-                          { value: 'UNIT', label: 'UNIT' },
-                        ]}
-                        placeholder="Satuan"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Column: Lokasi, Stok & Finansial */}
-                <div className="space-y-4">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-550 border-b border-slate-100 dark:border-slate-800 pb-1">
-                    Lokasi, Stok & Detail Lainnya
-                  </h4>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Lokasi Rak (Bin Location)
-                    </label>
-                    <Select2
-                      value={formData.bin_id}
-                      onChange={(val) => setFormData({ ...formData, ...syncBinLocation(val) })}
-                      options={[
-                        { value: '', label: '-- Pilih Lokasi Bin --' },
-                        ...availableBins.map((bin) => ({
-                          value: bin.id.toString(),
-                          label: bin.full_path || `${bin.code} - ${bin.name}`,
-                        })),
-                      ]}
-                      placeholder="Pilih lokasi bin..."
-                    />
-                    {!availableBins.length && (
-                      <p className="text-[10px] text-amber-600 dark:text-amber-400">
-                        Belum ada Bin. Tambahkan lokasi di menu Manajemen Lokasi Inventori.
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate block">
                         Stok Awal
                       </label>
                       <input
@@ -1165,7 +1372,7 @@ export default function BarangPage() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate block">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                         Stok Minimum
                       </label>
                       <input
@@ -1178,16 +1385,33 @@ export default function BarangPage() {
                         className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40"
                       />
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate block">
-                        Harga Satuan
-                      </label>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: Harga & Foto */}
+              {activeTab === 'harga' && (
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-550 border-b border-slate-100 dark:border-slate-800 pb-1">
+                    Harga & Foto Barang
+                  </h4>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Harga Satuan
+                    </label>
+                    <div className="relative flex rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 overflow-hidden focus-within:ring-2 focus-within:ring-[#F97316]/40 focus-within:border-[#F97316] transition-all">
+                      <span className="flex items-center px-3 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-500">
+                        Rp
+                      </span>
                       <input
-                        type="number"
-                        min="0"
-                        value={formData.harga_satuan}
-                        onChange={(e) => setFormData({ ...formData, harga_satuan: e.target.value })}
-                        className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40"
+                        type="text"
+                        value={formatRupiah(formData.harga_satuan)}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[^0-9]/g, '');
+                          setFormData({ ...formData, harga_satuan: raw });
+                        }}
+                        className="w-full px-3 py-2 text-sm bg-transparent text-slate-800 dark:text-slate-200 outline-none border-none focus:outline-none"
                         placeholder="0"
                       />
                     </div>
@@ -1215,14 +1439,26 @@ export default function BarangPage() {
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file) {
-                              setFormData((f) => ({
-                                ...f,
-                                image: file,
-                                image_url: URL.createObjectURL(file),
-                              }));
+                              try {
+                                const compressedBlob = await compressImage(file);
+                                const compressedFile = new File([compressedBlob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+                                  type: "image/jpeg",
+                                });
+                                setFormData((f) => ({
+                                  ...f,
+                                  image: compressedFile,
+                                  image_url: URL.createObjectURL(compressedFile),
+                                }));
+                              } catch {
+                                setFormData((f) => ({
+                                  ...f,
+                                  image: file,
+                                  image_url: URL.createObjectURL(file),
+                                }));
+                              }
                             }
                           }}
                           className="block w-full text-xs text-slate-500 dark:text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-[#F97316]/10 file:text-[#F97316] hover:file:bg-[#F97316]/20 cursor-pointer"
@@ -1241,27 +1477,28 @@ export default function BarangPage() {
                     <p className="text-[10px] text-slate-400">Pilih berkas gambar (JPG, PNG, atau WEBP, maks. 2MB)</p>
                   </div>
                 </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="flex-1 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 py-2.5 text-sm font-semibold rounded-xl bg-[#F97316] hover:bg-orange-600 text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
-                >
-                  {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {editId ? 'Simpan Perubahan' : 'Tambah Barang'}
-                </button>
-              </div>
+              )}
             </form>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="flex-1 py-2.5 text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => (document.getElementById('barang-form') as HTMLFormElement | null)?.requestSubmit()}
+                disabled={saving}
+                className="flex-1 py-2.5 text-sm font-semibold rounded-xl bg-[#F97316] hover:bg-orange-600 text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {editId ? 'Simpan Perubahan' : 'Tambah Barang'}
+              </button>
+            </div>
           </div>
         </div>
       )}

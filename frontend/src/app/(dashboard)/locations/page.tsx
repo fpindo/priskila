@@ -232,16 +232,7 @@ export default function LocationsPage() {
 
       {error && <Alert variant="danger" title="Error">{error}</Alert>}
 
-      {/* Tabs (settings-style underline tabs) */}
-      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800 pb-px overflow-x-auto">
-        <button
-          type="button"
-          className="flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all focus:outline-none -mb-px shrink-0 border-[#F97316] text-[#F97316]"
-        >
-          <MapPin className="h-4 w-4" />
-          Hierarki Lokasi
-        </button>
-      </div>
+
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
