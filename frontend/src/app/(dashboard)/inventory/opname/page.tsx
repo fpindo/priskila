@@ -13,6 +13,8 @@ import {
   Zap,
   CheckCircle2,
   ClipboardList,
+  ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface Warehouse {
@@ -70,6 +72,10 @@ export default function OpnamesPage() {
     }>
   >([]);
   const [updatingDraft, setUpdatingDraft] = useState(false);
+
+  // Finalize-confirm modal
+  const [finalizeConfirmOpen, setFinalizeConfirmOpen] = useState(false);
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
 
   const [generating, setGenerating] = useState(false);
 
@@ -200,15 +206,16 @@ export default function OpnamesPage() {
     }
   };
 
-  const finalizeOpname = async () => {
+  const finalizeOpname = () => {
     if (!viewDoc) return;
-    if (
-      !window.confirm(
-        'Apakah Anda yakin ingin memfinalisasi opname ini? Stok sistem akan langsung disesuaikan dengan stok fisik dan tidak dapat diubah lagi.'
-      )
-    )
-      return;
+    setFinalizeError(null);
+    setFinalizeConfirmOpen(true);
+  };
+
+  const runFinalize = async () => {
+    if (!viewDoc) return;
     setUpdatingDraft(true);
+    setFinalizeError(null);
     try {
       // 1. Save changes first
       await ApiService.put(`/inventory/opnames/${viewDoc.id}`, {
@@ -220,10 +227,11 @@ export default function OpnamesPage() {
       });
       // 2. Finalize
       await ApiService.post(`/inventory/opnames/${viewDoc.id}/finalize`);
+      setFinalizeConfirmOpen(false);
       setViewDoc(null);
       fetchDocs();
     } catch (e) {
-      alert((e as { message?: string }).message || 'Gagal memfinalisasi.');
+      setFinalizeError((e as { message?: string }).message || 'Gagal memfinalisasi.');
     } finally {
       setUpdatingDraft(false);
     }
@@ -565,6 +573,48 @@ export default function OpnamesPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Finalize Confirmation Modal */}
+      {finalizeConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-2xl border border-slate-200 dark:border-slate-800 text-center">
+            <div className="mx-auto mb-4 h-12 w-12 rounded-full bg-orange-50 dark:bg-orange-950/20 flex items-center justify-center">
+              <ShieldCheck className="h-6 w-6 text-[#F97316]" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-50 mb-2">
+              Finalisasi Opname?
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              Apakah Anda yakin ingin memfinalisasi opname ini? Stok sistem akan langsung disesuaikan dengan stok fisik dan tidak dapat diubah lagi.
+            </p>
+            {finalizeError && (
+              <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 flex items-start gap-2 text-left">
+                <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-red-600 dark:text-red-400">{finalizeError}</p>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <Button
+                variant="secondary"
+                onClick={() => setFinalizeConfirmOpen(false)}
+                disabled={updatingDraft}
+                className="flex-1"
+              >
+                Batal
+              </Button>
+              <Button
+                variant="primary"
+                onClick={runFinalize}
+                disabled={updatingDraft}
+                className="flex-1"
+              >
+                {updatingDraft && <Loader2 className="h-4 w-4 animate-spin" />}
+                Finalisasi
+              </Button>
             </div>
           </div>
         </div>

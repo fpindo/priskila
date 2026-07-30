@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 use App\Traits\Auditable;
 
-#[Fillable(['kode_project', 'nama_project', 'deskripsi', 'tanggal_mulai', 'tanggal_selesai', 'status'])]
+#[Fillable(['kode_project', 'nama_project', 'deskripsi', 'nominal_project', 'tanggal_mulai', 'tanggal_selesai', 'status'])]
 class Project extends Model
 {
     use HasFactory, SoftDeletes, Auditable;
@@ -17,8 +17,9 @@ class Project extends Model
     protected function casts(): array
     {
         return [
-            'tanggal_mulai' => 'date',
-            'tanggal_selesai' => 'date',
+            'tanggal_mulai'    => 'date',
+            'tanggal_selesai'  => 'date',
+            'nominal_project'  => 'integer',
         ];
     }
 }

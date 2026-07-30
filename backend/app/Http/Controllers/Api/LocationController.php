@@ -8,11 +8,29 @@ use App\Models\Shelf;
 use App\Models\Rack;
 use App\Models\Zone;
 use App\Models\Warehouse;
+use App\Models\Setting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * Map level -> required minimum depth (1..5).
+ * 1=warehouse, 2=zone, 3=rack, 4=shelf, 5=bin
+ */
 class LocationController extends Controller
 {
+    private const LEVEL_DEPTH = [
+        'zone'  => 2,
+        'rack'  => 3,
+        'shelf' => 4,
+        'bin'   => 5,
+    ];
+
+    private function depthAllowed(string $level): bool
+    {
+        $max = Setting::getMaxLocationDepth();
+        return self::LEVEL_DEPTH[$level] <= $max;
+    }
+
     // ── Read (hierarchy) ──
 
     public function getWarehouses(): JsonResponse
@@ -55,6 +73,9 @@ class LocationController extends Controller
 
     public function storeZone(Request $request): JsonResponse
     {
+        if (!$this->depthAllowed('zone')) {
+            return $this->errorResponse('Zone dinonaktifkan. Naikkan Kedalaman Hierarki Lokasi di Pengaturan.', 422);
+        }
         $data = $request->validate([
             'warehouse_id' => 'required|exists:warehouses,id',
             'code' => 'required|string|max:10',
@@ -85,6 +106,9 @@ class LocationController extends Controller
 
     public function storeRack(Request $request): JsonResponse
     {
+        if (!$this->depthAllowed('rack')) {
+            return $this->errorResponse('Rack dinonaktifkan. Naikkan Kedalaman Hierarki Lokasi di Pengaturan.', 422);
+        }
         $data = $request->validate([
             'zone_id' => 'required|exists:zones,id',
             'code' => 'required|string|max:10',
@@ -115,6 +139,9 @@ class LocationController extends Controller
 
     public function storeShelf(Request $request): JsonResponse
     {
+        if (!$this->depthAllowed('shelf')) {
+            return $this->errorResponse('Shelf dinonaktifkan. Naikkan Kedalaman Hierarki Lokasi di Pengaturan.', 422);
+        }
         $data = $request->validate([
             'rack_id' => 'required|exists:racks,id',
             'code' => 'required|string|max:10',
@@ -145,6 +172,9 @@ class LocationController extends Controller
 
     public function storeBin(Request $request): JsonResponse
     {
+        if (!$this->depthAllowed('bin')) {
+            return $this->errorResponse('Bin dinonaktifkan. Naikkan Kedalaman Hierarki Lokasi di Pengaturan.', 422);
+        }
         $data = $request->validate([
             'shelf_id' => 'required|exists:shelves,id',
             'code' => 'required|string|max:10',

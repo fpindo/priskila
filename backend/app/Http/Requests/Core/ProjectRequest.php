@@ -18,12 +18,13 @@ class ProjectRequest extends FormRequest
         $projectId = $this->route('project'); // Get project ID if updating
 
         return [
-            'kode_project' => ['required', 'string', 'unique:projects,kode_project,' . $projectId],
-            'nama_project' => ['required', 'string', 'max:255'],
-            'deskripsi' => ['nullable', 'string'],
-            'tanggal_mulai' => ['required', 'date'],
-            'tanggal_selesai' => ['required', 'date', 'after_or_equal:tanggal_mulai'],
-            'status' => ['required', 'in:PLANNING,ACTIVE,COMPLETED,ON_HOLD'],
+            'kode_project'    => ['required', 'string', 'unique:projects,kode_project,' . $projectId],
+            'nama_project'    => ['required', 'string', 'max:255'],
+            'deskripsi'       => ['nullable', 'string'],
+            'nominal_project' => ['nullable', 'integer', 'min:0'],
+            'tanggal_mulai'   => ['required', 'date'],
+            'tanggal_selesai' => ['nullable', 'date', 'after_or_equal:tanggal_mulai'],
+            'status'          => ['required', 'in:PLANNING,ACTIVE,COMPLETED,ON_HOLD,CANCELLED'],
         ];
     }
 

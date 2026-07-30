@@ -40,17 +40,18 @@ class SettingController extends Controller
             'settings.*.label'      => 'sometimes|string',
             'settings.*.description'=> 'sometimes|nullable|string',
             'settings.*.value'      => 'required|array',
-            'settings.*.value.prefix'    => 'required_unless:settings.*.key,format_tanggal,nama_perusahaan,logo_perusahaan,min_stock_global|string',
-            'settings.*.value.separator' => 'required_unless:settings.*.key,format_tanggal,nama_perusahaan,logo_perusahaan,min_stock_global|string',
-            'settings.*.value.padding'   => 'required_unless:settings.*.key,format_tanggal,nama_perusahaan,logo_perusahaan,min_stock_global|integer|min:1|max:6',
-            'settings.*.value.use_year'  => 'required_unless:settings.*.key,format_tanggal,nama_perusahaan,logo_perusahaan,min_stock_global|boolean',
-            'settings.*.value.use_month' => 'required_unless:settings.*.key,format_tanggal,nama_perusahaan,logo_perusahaan,min_stock_global|boolean',
+            'settings.*.value.prefix'    => 'required_unless:settings.*.key,format_tanggal,nama_perusahaan,logo_perusahaan,min_stock_global,location_max_depth|string',
+            'settings.*.value.separator' => 'required_unless:settings.*.key,format_tanggal,nama_perusahaan,logo_perusahaan,min_stock_global,location_max_depth|string',
+            'settings.*.value.padding'   => 'required_unless:settings.*.key,format_tanggal,nama_perusahaan,logo_perusahaan,min_stock_global,location_max_depth|integer|min:1|max:6',
+            'settings.*.value.use_year'  => 'required_unless:settings.*.key,format_tanggal,nama_perusahaan,logo_perusahaan,min_stock_global,location_max_depth|boolean',
+            'settings.*.value.use_month' => 'required_unless:settings.*.key,format_tanggal,nama_perusahaan,logo_perusahaan,min_stock_global,location_max_depth|boolean',
             'settings.*.value.format'    => 'required_if:settings.*.key,format_tanggal|string',
             'settings.*.value.name'      => 'required_if:settings.*.key,nama_perusahaan|string',
             'settings.*.value.type'      => 'required_if:settings.*.key,logo_perusahaan|string|in:icon,image',
             'settings.*.value.icon_name' => 'nullable|string',
             'settings.*.value.image_url' => 'nullable|string',
             'settings.*.value.min_stock' => 'required_if:settings.*.key,min_stock_global|integer|min:0',
+            'settings.*.value.depth'    => 'required_if:settings.*.key,location_max_depth|integer|min:1|max:5',
         ]);
 
         foreach ($data['settings'] as $item) {

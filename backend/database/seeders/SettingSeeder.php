@@ -164,6 +164,14 @@ class SettingSeeder extends Seeder
                     'min_stock' => 5,
                 ],
             ],
+            [
+                'key'         => 'location_max_depth',
+                'label'       => 'Kedalaman Hierarki Lokasi',
+                'description' => 'Mengatur seberapa dalam hierarki lokasi gudang yang digunakan (1=Warehouse saja, 2=+Zone, 3=+Rack, 4=+Shelf, 5=+Bin)',
+                'value'       => [
+                    'depth' => 5,
+                ],
+            ],
         ];
 
         foreach ($defaults as $setting) {

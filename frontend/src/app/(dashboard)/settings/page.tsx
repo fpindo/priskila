@@ -33,6 +33,7 @@ import {
   FileText,
   Building,
   Image,
+  MapPin,
   Globe,
   Activity,
   Award,
@@ -95,6 +96,7 @@ const typeIcons: Record<string, React.ReactNode> = {
   nama_perusahaan: <Building className="h-5 w-5" />,
   logo_perusahaan: <Image className="h-5 w-5" />,
   min_stock_global: <Boxes className="h-5 w-5" />,
+  location_max_depth: <MapPin className="h-5 w-5" />,
 };
 
 const typeColors: Record<string, string> = {
@@ -112,6 +114,7 @@ const typeColors: Record<string, string> = {
   nama_perusahaan: 'bg-orange-50 dark:bg-orange-950/20 text-[#F97316]',
   logo_perusahaan: 'bg-violet-50 dark:bg-violet-950/20 text-violet-600',
   min_stock_global: 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600',
+  location_max_depth: 'bg-amber-50 dark:bg-amber-950/20 text-amber-600',
 };
 
 function buildPreview(config: CodeConfig): string {
@@ -216,6 +219,9 @@ export default function SettingsPage() {
         p[s.key] = s.value.type === 'icon' ? `Ikon: ${s.value.icon_name}` : 'Gambar Logo Kustom';
       } else if (s.key === 'min_stock_global') {
         p[s.key] = `${s.value.min_stock} unit`;
+      } else if (s.key === 'location_max_depth') {
+        const labels: Record<number, string> = { 1: 'Warehouse', 2: 'Warehouse → Zone', 3: 'Warehouse → Zone → Rack', 4: 'Warehouse → Zone → Rack → Shelf', 5: 'Warehouse → Zone → Rack → Shelf → Bin' };
+        p[s.key] = labels[s.value.depth] || `${s.value.depth} level`;
       } else {
         p[s.key] = buildPreview(s.value);
       }
@@ -497,16 +503,16 @@ export default function SettingsPage() {
             .map((setting, idx) => ({ setting, idx }))
             .filter(({ setting }) => {
               if (activeTab === 'general') {
-                return setting.key === 'format_tanggal' || setting.key === 'nama_perusahaan' || setting.key === 'logo_perusahaan' || setting.key === 'min_stock_global';
+                return setting.key === 'format_tanggal' || setting.key === 'nama_perusahaan' || setting.key === 'logo_perusahaan' || setting.key === 'min_stock_global' || setting.key === 'location_max_depth';
               }
               if (activeTab === 'document') {
                 return setting.key.startsWith('nomor_');
               }
               // activeTab === 'master'
-              return !setting.key.startsWith('nomor_') && setting.key !== 'format_tanggal' && setting.key !== 'nama_perusahaan' && setting.key !== 'logo_perusahaan' && setting.key !== 'min_stock_global';
+              return !setting.key.startsWith('nomor_') && setting.key !== 'format_tanggal' && setting.key !== 'nama_perusahaan' && setting.key !== 'logo_perusahaan' && setting.key !== 'min_stock_global' && setting.key !== 'location_max_depth';
             })
             .map(({ setting, idx }) => (
-              <Card key={setting.key} className="overflow-hidden">
+              <Card key={setting.key}>
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-3">
                     <div
@@ -580,6 +586,25 @@ export default function SettingsPage() {
                         placeholder="5"
                       />
                       <p className="text-[10px] text-slate-400">Batas minimum stock global yang berlaku jika barang tidak diatur secara khusus.</p>
+                    </div>
+                  ) : setting.key === 'location_max_depth' ? (
+                    /* Location Hierarchy Depth field */
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Kedalaman Hierarki Lokasi *
+                      </label>
+                      <Select2
+                        value={String(setting.value.depth)}
+                        onChange={(val) => updateConfig(idx, 'depth', Number(val))}
+                        options={[
+                          { value: '1', label: '1 — Warehouse saja' },
+                          { value: '2', label: '2 — Warehouse → Zone' },
+                          { value: '3', label: '3 — Warehouse → Zone → Rack' },
+                          { value: '4', label: '4 — Warehouse → Zone → Rack → Shelf' },
+                          { value: '5', label: '5 — Warehouse → Zone → Rack → Shelf → Bin (Penuh)' },
+                        ]}
+                      />
+                      <p className="text-[10px] text-slate-400">Mengatur seberapa dalam hierarki lokasi gudang yang digunakan. Level yang lebih dalam dari nilai ini disembunyikan dari menu Lokasi.</p>
                     </div>
                   ) : setting.key === 'nama_perusahaan' ? (
                     /* Company Name field */

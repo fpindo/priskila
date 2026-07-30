@@ -3,8 +3,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ApiService, apiClient } from '@priskila/api';
 import { Card, CardContent, Alert, Badge, Button, Loading, Select2 } from '@priskila/ui';
-import { Search, Plus, Pencil, Trash2, Loader2, Package, RefreshCw, X, Zap, Copy, Upload } from 'lucide-react';
-import ExcelJS from 'exceljs';
+import { Search, Plus, Pencil, Trash2, Loader2, Package, RefreshCw, X, Zap, Copy, Upload, LayoutGrid, List } from 'lucide-react';
+import { XlsxWriter, parseXlsx } from '@/lib/xlsx-writer';
 
 interface Barang {
   id: number;
@@ -68,6 +68,8 @@ export default function BarangPage() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [pageSize, setPageSize] = useState<8 | 16 | 24>(8);
 
   // New features state
   const [itemsLookup, setItemsLookup] = useState<Barang[]>([]);
@@ -95,7 +97,7 @@ export default function BarangPage() {
     setLoading(true);
     setError(null);
     try {
-      const params: Record<string, string | number> = { limit: 10, page };
+      const params: Record<string, string | number> = { limit: pageSize, page };
       if (search) params.search = search;
       if (filterKategori) params.kategori = filterKategori;
       const res = await ApiService.get<PaginatedResponse<Barang>>('/barang', params);
@@ -112,7 +114,7 @@ export default function BarangPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, filterKategori, page]);
+  }, [search, filterKategori, page, pageSize]);
 
   const fetchLookupItems = async () => {
     try {
@@ -165,6 +167,33 @@ export default function BarangPage() {
       bin_id: binId,
       bin_location: selectedBin?.full_path || selectedBin?.name || '',
     };
+  };
+
+  const renderPagination = () => {
+    if (loading || meta.last_page <= 1) return null;
+    return (
+      <div className="flex items-center justify-between px-6 py-4 border-t border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/10">
+        <span className="text-xs text-slate-500">
+          Menampilkan halaman {meta.current_page} dari {meta.last_page} ({meta.total} barang)
+        </span>
+        <div className="flex gap-2">
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+            className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 disabled:opacity-50 text-slate-700 dark:text-slate-300"
+          >
+            Sebelumnya
+          </button>
+          <button
+            disabled={page >= meta.last_page}
+            onClick={() => setPage(page + 1)}
+            className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 disabled:opacity-50 text-slate-700 dark:text-slate-300"
+          >
+            Selanjutnya &rarr;
+          </button>
+        </div>
+      </div>
+    );
   };
 
   useEffect(() => {
@@ -294,40 +323,28 @@ export default function BarangPage() {
         : 'success';
   };
 
-  // Client-side Excel XLSX Parser (using exceljs)
+  // Client-side Excel XLSX Parser (zero-dependency)
   const parseExcel = async (file: File): Promise<any[]> => {
-    const buffer = await file.arrayBuffer();
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    const rows = await parseXlsx(file);
 
-    const worksheet = workbook.worksheets[0];
-    if (!worksheet) return [];
+    if (rows.length <= 1) return [];
 
-    const jsonData: any[][] = [];
-    worksheet.eachRow((row) => {
-      jsonData.push((row.values as any[]).slice(1)); // slice(1) removes the 1-indexed empty cell
-    });
+    const rawHeaders = rows[0].map((h) => String(h || '').trim().toLowerCase());
 
-    if (jsonData.length <= 1) return [];
-
-    const rawHeaders = jsonData[0].map((h: any) =>
-      String(h || '').trim().toLowerCase()
-    );
-
-    const skuIdx = rawHeaders.findIndex((h: string) => h.includes('sku') || h.includes('kode'));
-    const namaIdx = rawHeaders.findIndex((h: string) => h.includes('nama') || h.includes('name') || h.includes('barang'));
-    const katIdx = rawHeaders.findIndex((h: string) => h.includes('kategori') || h.includes('category'));
-    const satIdx = rawHeaders.findIndex((h: string) => h.includes('satuan') || h.includes('unit'));
-    const minIdx = rawHeaders.findIndex((h: string) => h.includes('min') || h.includes('limit') || h.includes('minimum'));
-    const deskIdx = rawHeaders.findIndex((h: string) => h.includes('deskripsi') || h.includes('description') || h.includes('ket'));
+    const skuIdx = rawHeaders.findIndex((h) => h.includes('sku') || h.includes('kode'));
+    const namaIdx = rawHeaders.findIndex((h) => h.includes('nama') || h.includes('name') || h.includes('barang'));
+    const katIdx = rawHeaders.findIndex((h) => h.includes('kategori') || h.includes('category'));
+    const satIdx = rawHeaders.findIndex((h) => h.includes('satuan') || h.includes('unit'));
+    const minIdx = rawHeaders.findIndex((h) => h.includes('min') || h.includes('limit') || h.includes('minimum'));
+    const deskIdx = rawHeaders.findIndex((h) => h.includes('deskripsi') || h.includes('description') || h.includes('ket'));
 
     const parsedItems = [];
 
-    for (let i = 1; i < jsonData.length; i++) {
-      const row = jsonData[i];
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
       if (!row || row.length === 0) continue;
 
-      const hasValue = row.some((val: any) => val !== null && val !== undefined && val !== '');
+      const hasValue = row.some((val) => val !== null && val !== undefined && val !== '');
       if (!hasValue) continue;
 
       const sku = skuIdx !== -1 ? String(row[skuIdx] || '').trim() : '';
@@ -345,23 +362,22 @@ export default function BarangPage() {
     return parsedItems;
   };
 
-  const appendReferenceSheet = (wb: ExcelJS.Workbook) => {
-    const wsRef = wb.addWorksheet('Referensi Kategori & Satuan');
-    wsRef.addRow(["Daftar Kategori", "", "Kode Satuan", "Nama Satuan"]);
+  const appendReferenceRows = (): [string, string, string, string][] => {
     const maxLen = Math.max(availableKategoris.length, availableSatuans.length);
+    const rows: [string, string, string, string][] = [['Daftar Kategori', '', 'Kode Satuan', 'Nama Satuan']];
     for (let i = 0; i < maxLen; i++) {
-      wsRef.addRow([
-        availableKategoris[i]?.name || "",
-        "",
-        availableSatuans[i]?.code || "",
-        availableSatuans[i]?.name || "",
+      rows.push([
+        availableKategoris[i]?.name || '',
+        '',
+        availableSatuans[i]?.code || '',
+        availableSatuans[i]?.name || '',
       ]);
     }
+    return rows;
   };
 
-  const triggerDownload = async (wb: ExcelJS.Workbook, filename: string) => {
-    const buffer = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const triggerDownload = async (wb: XlsxWriter, filename: string) => {
+    const blob = await wb.toBlob();
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
@@ -374,28 +390,28 @@ export default function BarangPage() {
   };
 
   const downloadTemplate = async () => {
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Template');
-    ws.addRow(["SKU", "Nama Barang", "Kategori", "Satuan", "Min Stock", "Deskripsi"]);
-    ws.addRow(["BRG-SAMPLE-001", "Pipa PVC 2 Inch", "Material", "METER", 5, "Pipa PVC merk Rucika"]);
-    ws.addRow(["BRG-SAMPLE-002", "Semen Tiga Roda", "Material", "SAK", 10, "Semen Portland 40kg"]);
-    ws.addRow(["BRG-SAMPLE-003", "Helm Safety Orange", "APD", "PCS", 2, "Helm keselamatan proyek"]);
-    appendReferenceSheet(wb);
+    const wb = new XlsxWriter();
+    wb.addSheet('Template', [
+      ['SKU', 'Nama Barang', 'Kategori', 'Satuan', 'Min Stock', 'Deskripsi'],
+      ['BRG-SAMPLE-001', 'Pipa PVC 2 Inch', 'Material', 'METER', 5, 'Pipa PVC merk Rucika'],
+      ['BRG-SAMPLE-002', 'Semen Tiga Roda', 'Material', 'SAK', 10, 'Semen Portland 40kg'],
+      ['BRG-SAMPLE-003', 'Helm Safety Orange', 'APD', 'PCS', 2, 'Helm keselamatan proyek'],
+    ]);
+    wb.addSheet('Referensi Kategori & Satuan', appendReferenceRows());
     await triggerDownload(wb, 'template_import_barang.xlsx');
   };
 
   const downloadExistingData = async () => {
     if (itemsLookup.length === 0) {
-      alert("Tidak ada data barang untuk diunduh.");
+      alert('Tidak ada data barang untuk diunduh.');
       return;
     }
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Data Barang Aktif');
-    ws.addRow(["SKU", "Nama Barang", "Kategori", "Satuan", "Min Stock", "Deskripsi"]);
-    itemsLookup.forEach((b) => {
-      ws.addRow([b.sku, b.nama_barang, b.kategori, b.satuan, b.min_stock, b.bin_location || '']);
-    });
-    appendReferenceSheet(wb);
+    const wb = new XlsxWriter();
+    wb.addSheet('Data Barang Aktif', [
+      ['SKU', 'Nama Barang', 'Kategori', 'Satuan', 'Min Stock', 'Deskripsi'],
+      ...itemsLookup.map((b) => [b.sku, b.nama_barang, b.kategori, b.satuan, b.min_stock, b.bin_location || '']),
+    ]);
+    wb.addSheet('Referensi Kategori & Satuan', appendReferenceRows());
     await triggerDownload(wb, 'data_barang_saat_ini.xlsx');
   };
 
@@ -480,16 +496,63 @@ export default function BarangPage() {
             <button
               onClick={fetchItems}
               className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"
+              title="Refresh"
             >
               <RefreshCw className="h-4 w-4" />
             </button>
+
+            {/* Page Size Selector */}
+            <div className="w-24">
+              <Select2
+                value={String(pageSize)}
+                onChange={(val) => {
+                  setPageSize(Number(val) as 8 | 16 | 24);
+                  setPage(1);
+                }}
+                options={[
+                  { value: '8', label: '8' },
+                  { value: '16', label: '16' },
+                  { value: '24', label: '24' },
+                ]}
+                placeholder="Tampil"
+              />
+            </div>
+
+            {/* List / Grid Toggle */}
+            <div className="inline-flex items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-0.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                title="Tampilan List"
+                className={`p-2 rounded-lg transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-[#F97316] text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
+                }`}
+              >
+                <List className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                title="Tampilan Grid"
+                className={`p-2 rounded-lg transition-colors ${
+                  viewMode === 'grid'
+                    ? 'bg-[#F97316] text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
+                }`}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
+      {viewMode === 'list' ? (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
@@ -609,32 +672,110 @@ export default function BarangPage() {
             </table>
           </div>
 
-          {/* Pagination */}
-          {!loading && meta.last_page > 1 && (
-            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/10">
-              <span className="text-xs text-slate-500">
-                Menampilkan halaman {meta.current_page} dari {meta.last_page} ({meta.total} barang)
-              </span>
-              <div className="flex gap-2">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 disabled:opacity-50 text-slate-700 dark:text-slate-300"
-                >
-                  Sebelumnya
-                </button>
-                <button
-                  disabled={page >= meta.last_page}
-                  onClick={() => setPage(page + 1)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-100 disabled:opacity-50 text-slate-700 dark:text-slate-300"
-                >
-                  Selanjutnya &rarr;
-                </button>
-              </div>
-            </div>
-          )}
+          {renderPagination()}
         </CardContent>
       </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-5">
+            {loading ? (
+              <div className="py-16 flex justify-center">
+                <Loading size="sm" />
+              </div>
+            ) : items.length === 0 ? (
+              <div className="py-16 text-center">
+                <Package className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+                <p className="text-slate-500 text-sm">Belum ada data barang.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {items.map((b) => (
+                  <div
+                    key={b.id}
+                    className="group relative flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden hover:shadow-lg hover:border-[#F97316]/40 transition-all"
+                  >
+                    {/* Image */}
+                    <div className="relative h-36 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center border-b border-slate-100 dark:border-slate-800">
+                      {b.image_url ? (
+                        <img
+                          src={b.image_url}
+                          alt={b.nama_barang}
+                          className="h-full w-full object-contain p-2"
+                        />
+                      ) : (
+                        <Package className="h-10 w-10 text-slate-300" />
+                      )}
+                      <span className="absolute top-2 left-2 font-mono text-[10px] font-bold text-[#F97316] bg-white/90 dark:bg-slate-900/90 backdrop-blur px-2 py-0.5 rounded-md border border-orange-100 dark:border-orange-950/40">
+                        {b.sku}
+                      </span>
+                      {/* Actions overlay */}
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => openClone(b)}
+                          title="Salin"
+                          className="p-1.5 rounded-lg bg-white/90 dark:bg-slate-900/90 backdrop-blur text-slate-500 hover:text-emerald-600 shadow-sm"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => openEdit(b)}
+                          title="Edit"
+                          className="p-1.5 rounded-lg bg-white/90 dark:bg-slate-900/90 backdrop-blur text-slate-500 hover:text-[#F97316] shadow-sm"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setDeleteId(b.id)}
+                          title="Hapus"
+                          className="p-1.5 rounded-lg bg-white/90 dark:bg-slate-900/90 backdrop-blur text-slate-500 hover:text-red-500 shadow-sm"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Body */}
+                    <div className="p-3.5 space-y-2 flex-1 flex flex-col">
+                      <div>
+                        <p className="font-semibold text-sm text-slate-800 dark:text-slate-100 line-clamp-2 min-h-[2.5rem]">
+                          {b.nama_barang}
+                        </p>
+                        {b.brand && (
+                          <p className="text-[10px] text-slate-400 mt-0.5">{b.brand}</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-medium">
+                          {b.kategori}
+                        </span>
+                        <span className="text-slate-500 font-medium">{b.satuan}</span>
+                      </div>
+
+                      {b.bin_location && (
+                        <p
+                          className="text-[10px] text-slate-400 truncate"
+                          title={b.bin_location}
+                        >
+                          📍 {b.bin_location}
+                        </p>
+                      )}
+
+                      <div className="flex items-center justify-between pt-2 mt-auto border-t border-slate-100 dark:border-slate-800">
+                        <Badge variant={stockVariant(b)}>{b.current_stock}</Badge>
+                        <span className="text-[10px] text-slate-400">
+                          min {b.effective_min_stock ?? b.min_stock}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+          {renderPagination()}
+        </Card>
+      )}
 
       {/* Import Modal */}
       {importModalOpen && (
@@ -811,7 +952,7 @@ export default function BarangPage() {
       {/* Edit/Create Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800">
+          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 dark:border-slate-800">
               <h3 className="font-bold text-slate-900 dark:text-slate-50">
                 {editId ? 'Edit Barang' : 'Tambah Barang Baru'}
@@ -823,7 +964,7 @@ export default function BarangPage() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <form onSubmit={handleSave} className="p-6 space-y-4">
+            <form onSubmit={handleSave} className="p-6 space-y-5">
               {formError && (
                 <Alert variant="danger" title="Error">
                   {formError}
@@ -833,7 +974,7 @@ export default function BarangPage() {
               {/* Copy from existing data selector (Only for new item creation) */}
               {!editId && itemsLookup.length > 0 && (
                 <div className="space-y-1.5 p-3 rounded-xl bg-orange-50/50 dark:bg-orange-950/10 border border-orange-100 dark:border-orange-950/30">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-355">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Salin dari Barang Lain (Opsional)
                   </label>
                   <Select2
@@ -867,214 +1008,243 @@ export default function BarangPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-355">
-                    SKU *
-                  </label>
-                  <div className="flex gap-2">
+              {/* 2-Column Grid Layout */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Left Column: Identitas Barang */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-550 border-b border-slate-100 dark:border-slate-800 pb-1">
+                    Identitas Barang
+                  </h4>
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      SKU *
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        required
+                        value={formData.sku}
+                        onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
+                        placeholder="BRG-001"
+                      />
+                      <button
+                        type="button"
+                        disabled={generating}
+                        onClick={generateCode}
+                        className="px-3 border border-slate-200 dark:border-slate-700 rounded-xl text-[#F97316] hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center gap-1 disabled:opacity-50 text-xs font-semibold shrink-0"
+                      >
+                        {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                        Auto
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Nama Barang *
+                    </label>
                     <input
                       required
-                      value={formData.sku}
-                      onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-955 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
-                      placeholder="BRG-001"
+                      value={formData.nama_barang}
+                      onChange={(e) => setFormData({ ...formData, nama_barang: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
+                      placeholder="Pipa PVC 2 Inch, Kabel, Semen..."
                     />
-                    <button
-                      type="button"
-                      disabled={generating}
-                      onClick={generateCode}
-                      className="px-3 border border-slate-200 dark:border-slate-700 rounded-xl text-[#F97316] hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center gap-1 disabled:opacity-50 text-xs font-semibold shrink-0"
-                    >
-                      {generating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-                      Auto
-                    </button>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Brand / Merk
+                    </label>
+                    <input
+                      value={formData.brand}
+                      onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
+                      placeholder="Schneider, Philips, dll..."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Kategori *
+                      </label>
+                      {availableKategoris.length > 0 ? (
+                        <Select2
+                          required
+                          value={formData.kategori}
+                          onChange={(val) => setFormData({ ...formData, kategori: val })}
+                          options={availableKategoris.map((c) => ({
+                            value: c.name,
+                            label: c.name,
+                          }))}
+                          placeholder="Kategori"
+                        />
+                      ) : (
+                        <input
+                          required
+                          value={formData.kategori}
+                          onChange={(e) => setFormData({ ...formData, kategori: e.target.value })}
+                          className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
+                          placeholder="Kategori..."
+                        />
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Satuan *
+                      </label>
+                      <Select2
+                        required
+                        value={formData.satuan}
+                        onChange={(val) => setFormData({ ...formData, satuan: val })}
+                        options={availableSatuans.length > 0 ? availableSatuans.map(s => ({
+                          value: s.code,
+                          label: `${s.code} - ${s.name}`,
+                        })) : [
+                          { value: 'PCS', label: 'PCS' },
+                          { value: 'SET', label: 'SET' },
+                          { value: 'BOX', label: 'BOX' },
+                          { value: 'ROLL', label: 'ROLL' },
+                          { value: 'METER', label: 'METER' },
+                          { value: 'KG', label: 'KG' },
+                          { value: 'LITER', label: 'LITER' },
+                          { value: 'UNIT', label: 'UNIT' },
+                        ]}
+                        placeholder="Satuan"
+                      />
+                    </div>
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Satuan *
-                  </label>
-                  <Select2
-                    required
-                    value={formData.satuan}
-                    onChange={(val) => setFormData({ ...formData, satuan: val })}
-                    options={availableSatuans.length > 0 ? availableSatuans.map(s => ({
-                      value: s.code,
-                      label: `${s.code} - ${s.name}`,
-                    })) : [
-                      { value: 'PCS', label: 'PCS' },
-                      { value: 'SET', label: 'SET' },
-                      { value: 'BOX', label: 'BOX' },
-                      { value: 'ROLL', label: 'ROLL' },
-                      { value: 'METER', label: 'METER' },
-                      { value: 'KG', label: 'KG' },
-                      { value: 'LITER', label: 'LITER' },
-                      { value: 'UNIT', label: 'UNIT' },
-                    ]}
-                    placeholder="Pilih Satuan"
-                  />
+
+                {/* Right Column: Lokasi, Stok & Finansial */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-550 border-b border-slate-100 dark:border-slate-800 pb-1">
+                    Lokasi, Stok & Detail Lainnya
+                  </h4>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Lokasi Rak (Bin Location)
+                    </label>
+                    <Select2
+                      value={formData.bin_id}
+                      onChange={(val) => setFormData({ ...formData, ...syncBinLocation(val) })}
+                      options={[
+                        { value: '', label: '-- Pilih Lokasi Bin --' },
+                        ...availableBins.map((bin) => ({
+                          value: bin.id.toString(),
+                          label: bin.full_path || `${bin.code} - ${bin.name}`,
+                        })),
+                      ]}
+                      placeholder="Pilih lokasi bin..."
+                    />
+                    {!availableBins.length && (
+                      <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                        Belum ada Bin. Tambahkan lokasi di menu Manajemen Lokasi Inventori.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate block">
+                        Stok Awal
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        disabled={!!editId}
+                        value={formData.current_stock}
+                        onChange={(e) =>
+                          setFormData({ ...formData, current_stock: Number(e.target.value) })
+                        }
+                        className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 disabled:opacity-50"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate block">
+                        Stok Minimum
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.min_stock}
+                        onChange={(e) =>
+                          setFormData({ ...formData, min_stock: Number(e.target.value) })
+                        }
+                        className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate block">
+                        Harga Satuan
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.harga_satuan}
+                        onChange={(e) => setFormData({ ...formData, harga_satuan: e.target.value })}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+                      Foto Barang (Opsional)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      {formData.image_url ? (
+                        <div className="h-16 w-16 rounded-xl border border-slate-200 dark:border-slate-700 p-1 bg-white dark:bg-slate-950 flex items-center justify-center shrink-0">
+                          <img
+                            src={formData.image_url}
+                            alt="Preview"
+                            className="h-full w-full object-contain"
+                          />
+                        </div>
+                      ) : (
+                        <div className="h-16 w-16 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-400 shrink-0 text-xs">
+                          No Photo
+                        </div>
+                      )}
+                      <div className="flex-1 space-y-1">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setFormData((f) => ({
+                                ...f,
+                                image: file,
+                                image_url: URL.createObjectURL(file),
+                              }));
+                            }
+                          }}
+                          className="block w-full text-xs text-slate-500 dark:text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-[#F97316]/10 file:text-[#F97316] hover:file:bg-[#F97316]/20 cursor-pointer"
+                        />
+                        {formData.image_url && (
+                          <button
+                            type="button"
+                            onClick={() => setFormData((f) => ({ ...f, image: null, image_url: '' }))}
+                            className="text-xs text-red-500 hover:underline inline-block mt-0.5"
+                          >
+                            Hapus Foto
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-400">Pilih berkas gambar (JPG, PNG, atau WEBP, maks. 2MB)</p>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Nama Barang *
-                </label>
-                <input
-                  required
-                  value={formData.nama_barang}
-                  onChange={(e) => setFormData({ ...formData, nama_barang: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
-                  placeholder="Pipa PVC 2 Inch, Kabel, Semen..."
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-355">
-                    Kategori *
-                  </label>
-                  {availableKategoris.length > 0 ? (
-                    <Select2
-                      required
-                      value={formData.kategori}
-                      onChange={(val) => setFormData({ ...formData, kategori: val })}
-                      options={availableKategoris.map((c) => ({
-                        value: c.name,
-                        label: c.name,
-                      }))}
-                      placeholder="Pilih Kategori"
-                    />
-                  ) : (
-                    <input
-                      required
-                      value={formData.kategori}
-                      onChange={(e) => setFormData({ ...formData, kategori: e.target.value })}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
-                      placeholder="Elektrikal, Mekanikal, dll..."
-                    />
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-355">
-                    Brand / Merk
-                  </label>
-                  <input
-                    value={formData.brand}
-                    onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-955 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
-                    placeholder="Schneider, Philips, dll..."
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Lokasi Rak (Bin Location)
-                </label>
-                <Select2
-                  value={formData.bin_id}
-                  onChange={(val) => setFormData({ ...formData, ...syncBinLocation(val) })}
-                  options={[
-                    { value: '', label: '-- Pilih Lokasi Bin --' },
-                    ...availableBins.map((bin) => ({
-                      value: bin.id.toString(),
-                      label: bin.full_path || `${bin.code} - ${bin.name}`,
-                    })),
-                  ]}
-                  placeholder="Pilih relasi lokasi barang..."
-                />
-                {!availableBins.length && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    Belum ada Bin. Tambahkan lokasi di menu Manajemen Lokasi Inventori.
-                  </p>
-                )}
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-350">
-                    Stock Awal
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    disabled={!!editId}
-                    value={formData.current_stock}
-                    onChange={(e) =>
-                      setFormData({ ...formData, current_stock: Number(e.target.value) })
-                    }
-                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 disabled:opacity-50"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-355">
-                    Stock Minimum
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.min_stock}
-                    onChange={(e) =>
-                      setFormData({ ...formData, min_stock: Number(e.target.value) })
-                    }
-                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-355">
-                    Harga Satuan
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.harga_satuan}
-                    onChange={(e) => setFormData({ ...formData, harga_satuan: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40"
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
-                  Foto Barang (Opsional)
-                </label>
-                <div className="flex items-center gap-3">
-                  {formData.image_url && (
-                    <div className="h-12 w-12 rounded-xl border border-slate-200 dark:border-slate-700 p-1 bg-white flex items-center justify-center shrink-0">
-                      <img
-                        src={formData.image_url}
-                        alt="Preview"
-                        className="h-full w-full object-contain"
-                      />
-                    </div>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setFormData((f) => ({
-                          ...f,
-                          image: file,
-                          image_url: URL.createObjectURL(file),
-                        }));
-                      }
-                    }}
-                    className="block w-full text-xs text-slate-500 dark:text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-[#F97316]/10 file:text-[#F97316] hover:file:bg-[#F97316]/20 cursor-pointer"
-                  />
-                  {formData.image_url && (
-                    <button
-                      type="button"
-                      onClick={() => setFormData((f) => ({ ...f, image: null, image_url: '' }))}
-                      className="text-xs text-red-500 hover:underline shrink-0"
-                    >
-                      Hapus
-                    </button>
-                  )}
-                </div>
-                <p className="text-[10px] text-slate-400">Pilih berkas gambar (JPG, PNG, atau WEBP, maks. 2MB)</p>
-              </div>
-              <div className="flex gap-3 pt-2">
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}

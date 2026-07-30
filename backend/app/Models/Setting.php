@@ -39,4 +39,26 @@ class Setting extends Model
         self::$configCache[$key] = $setting ? $setting->value : null;
         return self::$configCache[$key];
     }
+
+    /**
+     * Read an integer field from a setting's array value.
+     * Returns the provided default when missing or invalid.
+     */
+    public static function getConfigInt(string $key, string $field, int $default = 0): int
+    {
+        $config = static::getConfig($key);
+        if (!$config || !array_key_exists($field, $config)) {
+            return $default;
+        }
+        return (int) $config[$field];
+    }
+
+    /**
+     * Maximum hierarchy depth for locations (1=warehouse only, 5=full warehouse→bin).
+     */
+    public static function getMaxLocationDepth(): int
+    {
+        $depth = static::getConfigInt('location_max_depth', 'depth', 5);
+        return max(1, min(5, $depth));
+    }
 }

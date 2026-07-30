@@ -244,11 +244,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Link
         href="/dashboard"
         onClick={() => setIsMobileOpen(false)}
-        className={`flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-          pathname === '/dashboard'
-            ? 'bg-[#F97316] text-white shadow-sm'
-            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-slate-100'
-        }`}
+        className={`flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${pathname === '/dashboard'
+          ? 'bg-[#F97316] text-white shadow-sm'
+          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-slate-100'
+          }`}
       >
         <LayoutDashboard
           className={`h-4.5 w-4.5 shrink-0 ${pathname === '/dashboard' ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`}
@@ -275,9 +274,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <button
                 type="button"
                 onClick={() => toggleGroup(group.title)}
-                className={`w-full flex items-center justify-between px-4 py-2 text-left text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-all focus:outline-none ${
-                  !isSidebarOpen ? 'lg:opacity-0 lg:h-0 lg:py-0 overflow-hidden' : 'block'
-                }`}
+                className={`w-full flex items-center justify-between px-4 py-2 text-left text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-all focus:outline-none ${!isSidebarOpen ? 'lg:opacity-0 lg:h-0 lg:py-0 overflow-hidden' : 'block'
+                  }`}
               >
                 <span className="text-[10px] font-bold uppercase tracking-wider">
                   {group.title}
@@ -292,9 +290,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </button>
 
               <div
-                className={`space-y-1 transition-all duration-200 ${
-                  isSidebarOpen && !isOpen ? 'h-0 opacity-0 overflow-hidden' : 'h-auto opacity-100'
-                }`}
+                className={`space-y-1 transition-all duration-200 ${isSidebarOpen && !isOpen ? 'h-0 opacity-0 overflow-hidden' : 'h-auto opacity-100'
+                  }`}
               >
                 {group.items.map((item) => {
                   const Icon = item.icon;
@@ -315,11 +312,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       key={item.path}
                       href={item.path}
                       onClick={() => setIsMobileOpen(false)}
-                      className={`flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                        isActive
-                          ? 'bg-[#F97316] text-white shadow-sm'
-                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-slate-100'
-                      }`}
+                      className={`flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
+                        ? 'bg-[#F97316] text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-slate-100'
+                        }`}
                     >
                       <Icon
                         className={`h-4.5 w-4.5 shrink-0 ${isActive ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`}
@@ -343,9 +339,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 font-sans transition-colors duration-200">
       {/* Sidebar - Desktop */}
       <aside
-        className={`hidden lg:flex flex-col bg-white dark:bg-slate-900 border-r border-slate-150 dark:border-slate-800 shrink-0 sticky top-0 h-full transition-all duration-300 ${
-          isSidebarOpen ? 'w-64' : 'w-20'
-        }`}
+        className={`hidden lg:flex flex-col bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 shrink-0 sticky top-0 h-full transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'
+          }`}
       >
         <div className="flex items-center justify-between h-16 px-4 border-b border-slate-100 dark:border-slate-800/80">
           <Link
@@ -377,11 +372,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="p-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-col gap-2">
           <Link
             href="/profile"
-            className={`flex items-center gap-3 px-2 py-2 rounded-xl transition-colors ${
-              pathname.startsWith('/profile')
-                ? 'bg-slate-100 dark:bg-slate-800'
-                : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
-            }`}
+            className={`flex items-center gap-3 px-2 py-2 rounded-xl transition-colors ${pathname.startsWith('/profile')
+              ? 'bg-slate-100 dark:bg-slate-800'
+              : 'hover:bg-slate-50 dark:hover:bg-slate-800/40'
+              }`}
           >
             <Avatar name={user.name} size="sm" />
             <div className={`text-left shrink-0 ${!isSidebarOpen ? 'lg:hidden' : 'block'}`}>
@@ -413,9 +407,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-white dark:bg-slate-900 border-r border-slate-150 dark:border-slate-800 h-full transition-transform duration-300 lg:hidden ${
-          isMobileOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-white dark:bg-slate-900 border-r border-slate-150 dark:border-slate-800 h-full transition-transform duration-300 lg:hidden ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         <div className="flex items-center justify-between h-16 px-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2">
@@ -457,7 +450,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Navbar */}
-        <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-150 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-4 sm:px-6">
+        <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-100 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-4 sm:px-6">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setIsMobileOpen(true)}

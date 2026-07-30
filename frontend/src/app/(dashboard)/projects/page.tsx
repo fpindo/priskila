@@ -10,6 +10,7 @@ interface Project {
   kode_project: string;
   nama_project: string;
   deskripsi: string | null;
+  nominal_project: number | null;
   tanggal_mulai: string;
   tanggal_selesai: string | null;
   status: string;
@@ -38,10 +39,22 @@ const emptyForm = {
   kode_project: '',
   nama_project: '',
   deskripsi: '',
+  nominal_project: '',
   tanggal_mulai: '',
   tanggal_selesai: '',
   status: 'ACTIVE',
 };
+
+// Format angka ke tampilan Rupiah (1000000 → "1.000.000")
+const formatRupiah = (value: string | number | null | undefined): string => {
+  if (value === null || value === undefined || value === '') return '';
+  const digits = String(value).replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
+// Parse tampilan Rupiah ke angka string ("1.000.000" → "1000000")
+const parseRupiah = (display: string): string => display.replace(/\./g, '');
 
 const formatDate = (dateStr: string | null, formatPattern: string = 'DD-MM-YYYY') => {
   if (!dateStr) return '';
@@ -151,6 +164,7 @@ export default function ProjectsPage() {
       kode_project: p.kode_project,
       nama_project: p.nama_project,
       deskripsi: p.deskripsi || '',
+      nominal_project: p.nominal_project ? formatRupiah(p.nominal_project) : '',
       tanggal_mulai: p.tanggal_mulai ? p.tanggal_mulai.split('T')[0] : '',
       tanggal_selesai: p.tanggal_selesai ? p.tanggal_selesai.split('T')[0] : '',
       status: p.status,
@@ -164,8 +178,10 @@ export default function ProjectsPage() {
     setSaving(true);
     setFormError(null);
     try {
+      const rawNominal = parseRupiah(formData.nominal_project);
       const payload = {
         ...formData,
+        nominal_project: rawNominal ? Number(rawNominal) : null,
         tanggal_selesai: formData.tanggal_selesai || null,
         deskripsi: formData.deskripsi || null,
       };
@@ -269,6 +285,9 @@ export default function ProjectsPage() {
                   <th className="px-5 py-3.5 text-left font-semibold text-slate-600 dark:text-slate-400">
                     Nama Project
                   </th>
+                  <th className="px-5 py-3.5 text-right font-semibold text-slate-600 dark:text-slate-400">
+                    Nominal
+                  </th>
                   <th className="px-5 py-3.5 text-left font-semibold text-slate-600 dark:text-slate-400">
                     Periode
                   </th>
@@ -283,17 +302,17 @@ export default function ProjectsPage() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="py-16 text-center">
-                      <Loading size="sm" />
-                    </td>
-                  </tr>
+                      <td colSpan={6} className="py-16 text-center">
+                        <Loading size="sm" />
+                      </td>
+                    </tr>
                 ) : projects.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-16 text-center">
-                      <Briefcase className="h-8 w-8 mx-auto text-slate-300 mb-2" />
-                      <p className="text-slate-500 text-sm">Belum ada data project.</p>
-                    </td>
-                  </tr>
+                      <td colSpan={6} className="py-16 text-center">
+                        <Briefcase className="h-8 w-8 mx-auto text-slate-300 mb-2" />
+                        <p className="text-slate-500 text-sm">Belum ada data project.</p>
+                      </td>
+                    </tr>
                 ) : (
                   projects.map((p) => (
                     <tr
@@ -313,6 +332,18 @@ export default function ProjectsPage() {
                           <p className="text-xs text-slate-400 mt-0.5 truncate max-w-xs">
                             {p.deskripsi}
                           </p>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 text-right whitespace-nowrap">
+                        {p.nominal_project != null ? (
+                          <div>
+                            <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 mr-0.5">Rp</span>
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 tabular-nums">
+                              {formatRupiah(p.nominal_project)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
                         )}
                       </td>
                       <td className="px-5 py-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">
@@ -437,6 +468,27 @@ export default function ProjectsPage() {
                   className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]"
                   placeholder="Nama proyek..."
                 />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Nominal Project
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 dark:text-slate-500 select-none">
+                    Rp
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={formData.nominal_project}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/\D/g, '');
+                      setFormData({ ...formData, nominal_project: formatRupiah(raw) });
+                    }}
+                    className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316] tabular-nums"
+                    placeholder="0"
+                  />
+                </div>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">

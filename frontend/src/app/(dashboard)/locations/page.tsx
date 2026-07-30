@@ -55,6 +55,20 @@ export default function LocationsPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ level: LocationLevel; id: number } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Max hierarchy depth from settings (1..5). Levels above this are hidden.
+  const [maxDepth, setMaxDepth] = useState<number>(5);
+  const fetchMaxDepth = useCallback(async () => {
+    try {
+      const res = await ApiService.get<any[]>('/settings');
+      if (res.success && res.data) {
+        const found = res.data.find((s: any) => s.key === 'location_max_depth');
+        if (found?.value?.depth) setMaxDepth(Math.max(1, Math.min(5, Number(found.value.depth))));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const fetchWarehouses = useCallback(async () => {
     setLoading(true);
     try {
@@ -67,7 +81,10 @@ export default function LocationsPage() {
     }
   }, []);
 
-  useEffect(() => { fetchWarehouses(); }, [fetchWarehouses]);
+  useEffect(() => {
+    fetchMaxDepth();
+    fetchWarehouses();
+  }, [fetchMaxDepth, fetchWarehouses]);
 
   const fetchZones = async (wid: number) => {
     try {
@@ -128,7 +145,7 @@ export default function LocationsPage() {
     setFormError(null);
 
     const parentKey = { zone: 'warehouse_id', rack: 'zone_id', shelf: 'rack_id', bin: 'shelf_id' }[editLevel];
-    const endpoint = `/${editLevel}s`;
+    const endpoint = { zone: '/zones', rack: '/racks', shelf: '/shelves', bin: '/bins' }[editLevel];
 
     try {
       if (editId) {
@@ -153,7 +170,8 @@ export default function LocationsPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await ApiService.delete(`/${deleteTarget.level}s/${deleteTarget.id}`);
+      const delEndpoint = { zone: '/zones', rack: '/racks', shelf: '/shelves', bin: '/bins' }[deleteTarget.level];
+      await ApiService.delete(`${delEndpoint}/${deleteTarget.id}`);
       // Remove from local state
       if (deleteTarget.level === 'zone') setZones(prev => prev.filter(z => z.id !== deleteTarget.id));
       else if (deleteTarget.level === 'rack') setRacks(prev => prev.filter(r => r.id !== deleteTarget.id));
@@ -187,6 +205,17 @@ export default function LocationsPage() {
 
   const childLevels: Record<LocationLevel, LocationLevel | null> = { zone: 'rack', rack: 'shelf', shelf: 'bin', bin: null };
 
+  const levelDepth: Record<LocationLevel, number> = { zone: 2, rack: 3, shelf: 4, bin: 5 };
+  const isAllowed = (level: LocationLevel) => levelDepth[level] <= maxDepth;
+
+  const depthLabel: Record<number, string> = {
+    1: 'Warehouse saja',
+    2: 'Warehouse → Zone',
+    3: 'Warehouse → Zone → Rack',
+    4: 'Warehouse → Zone → Rack → Shelf',
+    5: 'Warehouse → Zone → Rack → Shelf → Bin',
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -195,12 +224,24 @@ export default function LocationsPage() {
             <MapPin className="h-5 w-5 text-[#F97316]" /> Manajemen Lokasi Inventori
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Kelola hierarki lokasi gudang: Warehouse → Zone → Rack → Shelf → Bin
+            Hierarki aktif: <span className="font-semibold text-slate-700 dark:text-slate-300">{depthLabel[maxDepth] || 'Warehouse → Bin'}</span>
+            {' '}(atur di Pengaturan → Format Umum &amp; Tanggal)
           </p>
         </div>
       </div>
 
       {error && <Alert variant="danger" title="Error">{error}</Alert>}
+
+      {/* Tabs (settings-style underline tabs) */}
+      <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800 pb-px overflow-x-auto">
+        <button
+          type="button"
+          className="flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-all focus:outline-none -mb-px shrink-0 border-[#F97316] text-[#F97316]"
+        >
+          <MapPin className="h-4 w-4" />
+          Hierarki Lokasi
+        </button>
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -229,14 +270,16 @@ export default function LocationsPage() {
                 <span className="font-bold text-slate-800 dark:text-slate-200">{w.nama_gudang}</span>
                 <span className="text-xs text-slate-400 ml-1">({w.kode_gudang})</span>
                 <div className="ml-auto">
+                  {isAllowed('zone') && (
                   <Button onClick={() => openCreate('zone', w.id)} size="sm" variant="secondary">
                     <Plus className="h-3.5 w-3.5" /> <span className="ml-1 text-xs">Zone</span>
                   </Button>
+                )}
                 </div>
               </div>
 
               {/* Zones */}
-              {expW[w.id] && (
+              {isAllowed('zone') && expW[w.id] && (
                 <div className="ml-6 mr-3 mb-3 space-y-2">
                   {zones.filter(z => z.warehouse_id === w.id).length === 0 ? (
                     <p className="text-xs text-slate-400 pl-6 py-2">Belum ada zone.</p>
@@ -251,14 +294,16 @@ export default function LocationsPage() {
                         <span className="text-xs text-slate-400">({zone.code})</span>
                         <div className="ml-auto flex items-center gap-1">
                           <ActionBtns level="zone" item={zone} parentId={w.id} />
-                          <Button onClick={() => openCreate('rack', zone.id)} size="xs" variant="secondary">
-                            <Plus className="h-3 w-3" /> <span className="ml-0.5 text-[10px]">Rack</span>
-                          </Button>
+                          {isAllowed('rack') && (
+                            <Button onClick={() => openCreate('rack', zone.id)} size="xs" variant="secondary">
+                              <Plus className="h-3 w-3" /> <span className="ml-0.5 text-[10px]">Rack</span>
+                            </Button>
+                          )}
                         </div>
                       </div>
 
                       {/* Racks */}
-                      {expZ[zone.id] && (
+                      {isAllowed('rack') && expZ[zone.id] && (
                         <div className="ml-5 mr-2 mb-2 space-y-1.5">
                           {racks.filter(r => r.zone_id === zone.id).length === 0 ? (
                             <p className="text-xs text-slate-400 pl-6 py-1">Belum ada rack.</p>
@@ -273,14 +318,16 @@ export default function LocationsPage() {
                                 <span className="text-xs text-slate-400">({rack.code})</span>
                                 <div className="ml-auto flex items-center gap-1">
                                   <ActionBtns level="rack" item={rack} parentId={zone.id} />
-                                  <Button onClick={() => openCreate('shelf', rack.id)} size="xs" variant="secondary">
-                                    <Plus className="h-3 w-3" /> <span className="ml-0.5 text-[10px]">Shelf</span>
-                                  </Button>
+                                  {isAllowed('shelf') && (
+                                    <Button onClick={() => openCreate('shelf', rack.id)} size="xs" variant="secondary">
+                                      <Plus className="h-3 w-3" /> <span className="ml-0.5 text-[10px]">Shelf</span>
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
 
                               {/* Shelves */}
-                              {expR[rack.id] && (
+                              {isAllowed('shelf') && expR[rack.id] && (
                                 <div className="ml-4 mr-2 mb-2 space-y-1">
                                   {shelves.filter(s => s.rack_id === rack.id).length === 0 ? (
                                     <p className="text-xs text-slate-400 pl-6 py-1">Belum ada shelf.</p>
@@ -295,14 +342,16 @@ export default function LocationsPage() {
                                         <span className="text-xs text-slate-400">({shelf.code})</span>
                                         <div className="ml-auto flex items-center gap-1">
                                           <ActionBtns level="shelf" item={shelf} parentId={rack.id} />
-                                          <Button onClick={() => openCreate('bin', shelf.id)} size="xs" variant="secondary">
-                                            <Plus className="h-3 w-3" /> <span className="ml-0.5 text-[10px]">Bin</span>
-                                          </Button>
+                                          {isAllowed('bin') && (
+                                            <Button onClick={() => openCreate('bin', shelf.id)} size="xs" variant="secondary">
+                                              <Plus className="h-3 w-3" /> <span className="ml-0.5 text-[10px]">Bin</span>
+                                            </Button>
+                                          )}
                                         </div>
                                       </div>
 
                                       {/* Bins */}
-                                      {expS[shelf.id] && (
+                                      {isAllowed('bin') && expS[shelf.id] && (
                                         <div className="ml-3 mr-2 mb-2 space-y-0.5">
                                           {bins.filter(b => b.shelf_id === shelf.id).length === 0 ? (
                                             <p className="text-xs text-slate-400 pl-6 py-1">Belum ada bin.</p>
